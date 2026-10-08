@@ -1,3 +1,4 @@
+import json
 import os
 
 from dotenv import load_dotenv
@@ -333,6 +334,119 @@ class InfluxDBService:
                 }
 
                 events.append(event)
+
+        return events
+
+    # --------------------------------------------------
+    # SECURITY EVENTS (jailbreak monitoring / Red Team)
+    # --------------------------------------------------
+
+    def write_security_event(self, event: dict):
+        """
+        Store a structured security event. Only redacted, truncated
+        excerpts are ever present in `event` (see app.security.redaction).
+        """
+
+        point = (
+            Point("security_events")
+
+            .tag("severity", event["severity"])
+            .tag("category", event["category"])
+            .tag("outcome", event["outcome"])
+            .tag("source", event["source"])
+
+            .field("event_id", event["event_id"])
+            .field("event_type", event["event_type"])
+            .field("risk_score", int(event["risk_score"]))
+            .field("confidence", float(event["confidence"]))
+            .field("summary", event["summary"])
+            .field("session_id", event.get("session_id") or "")
+            .field("assessment_id", event.get("assessment_id") or "")
+            .field("model_resisted", int(
+                -1 if event.get("model_resisted") is None
+                else bool(event["model_resisted"])
+            ))
+            .field("jailbreak_success", bool(event["jailbreak_success"]))
+            .field("alert_triggered", bool(event["alert_triggered"]))
+            .field("details", json.dumps(event.get("details", {})))
+            .field("event_time", event["timestamp"])
+        )
+
+        self.write_api.write(
+            bucket=INFLUXDB_BUCKET,
+            org=INFLUXDB_ORG,
+            record=point
+        )
+
+    def query_security_events(
+        self,
+        time_range: str = "-7d",
+        limit: int = 1000
+    ) -> list[dict]:
+        """
+        Retrieve stored security events, newest first.
+        """
+
+        query = f'''
+        from(bucket: "{INFLUXDB_BUCKET}")
+            |> range(start: {time_range})
+            |> filter(fn: (r) =>
+                r._measurement == "security_events"
+            )
+            |> pivot(
+                rowKey: ["_time"],
+                columnKey: ["_field"],
+                valueColumn: "_value"
+            )
+            |> sort(
+                columns: ["_time"],
+                desc: true
+            )
+            |> limit(n: {limit})
+        '''
+
+        tables = self.query_api.query(
+            query=query,
+            org=INFLUXDB_ORG
+        )
+
+        events = []
+
+        for table in tables:
+            for record in table.records:
+
+                values = record.values
+
+                resisted = values.get("model_resisted")
+
+                try:
+                    details = json.loads(values.get("details") or "{}")
+                except (TypeError, ValueError):
+                    details = {}
+
+                events.append({
+                    "event_id": values.get("event_id"),
+                    "timestamp": (
+                        values.get("event_time")
+                        or record.get_time().isoformat()
+                    ),
+                    "event_type": values.get("event_type"),
+                    "severity": values.get("severity"),
+                    "category": values.get("category"),
+                    "outcome": values.get("outcome"),
+                    "source": values.get("source"),
+                    "risk_score": int(values.get("risk_score") or 0),
+                    "confidence": float(values.get("confidence") or 0.0),
+                    "summary": values.get("summary"),
+                    "session_id": values.get("session_id") or None,
+                    "assessment_id": values.get("assessment_id") or None,
+                    "model_resisted": (
+                        None if resisted in (None, -1) else bool(resisted)
+                    ),
+                    "jailbreak_success": bool(values.get("jailbreak_success")),
+                    "alert_triggered": bool(values.get("alert_triggered")),
+                    "details": details,
+                })
 
         return events
 

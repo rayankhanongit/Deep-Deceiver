@@ -2,88 +2,139 @@ import { useState } from "react";
 
 import ChatPage from "./pages/ChatPage";
 import SOCPage from "./pages/SOCPage";
+import SecurityPage from "./pages/SecurityPage";
+
+import RedTeamPanel from "./components/RedTeamPanel";
+import SecurityToast from "./components/SecurityToast";
+import useSecurityStream from "./hooks/useSecurityStream";
 
 import "./App.css";
+import "./ui.css";
+
+const NAV = [
+  { id: "chat", label: "LLM Interface", icon: "💬" },
+  { id: "security", label: "Security Monitor", icon: "🛡" },
+  { id: "soc", label: "SOC Dashboard", icon: "📊" },
+];
 
 function App() {
 
   const [page, setPage] = useState("chat");
 
   // Keep chat history at App level so it survives
-  // switching between LLM Interface and SOC Dashboard.
+  // switching between pages.
   const [messages, setMessages] = useState([]);
 
-  // Create one unique session for this browser conversation.
-  const [sessionId] = useState(() => crypto.randomUUID());
+  // One unique session per browser conversation.
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+
+  const [redTeamOpen, setRedTeamOpen] = useState(false);
+
+  // Bumped on every alert so the Security Monitor refreshes immediately.
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const { alert, connected, clearAlert } = useSecurityStream();
+
+  const [seenAlert, setSeenAlert] = useState(null);
+
+  if (alert && alert !== seenAlert) {
+    setSeenAlert(alert);
+    setRefreshKey((key) => key + 1);
+  }
+
+  const newChat = () => {
+    setMessages([]);
+    setSessionId(crypto.randomUUID());
+    setPage("chat");
+  };
 
   return (
-    <div className="app">
+    <div className="shell">
 
-      <header className="header">
+      <aside className="sidebar">
 
-        <div>
+        <div className="brand">
+          <span className="brand-mark">✺</span>
 
-          <h1>DEEP-DECEIVER</h1>
-
-          <p>
-            Agentic Active-Defense Framework
-          </p>
-
+          <div>
+            <h1>DEEP-DECEIVER</h1>
+            <p>Agentic Active-Defense Framework</p>
+          </div>
         </div>
 
+        <button className="new-chat" onClick={newChat}>
+          ＋ New chat
+        </button>
 
-        <div className="navigation">
+        <nav className="side-nav">
+          {NAV.map((item) => (
+            <button
+              key={item.id}
+              className={page === item.id ? "side-link active" : "side-link"}
+              onClick={() => setPage(item.id)}
+            >
+              <span>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
 
-          <button
-            className={
-              page === "chat"
-                ? "nav-button active"
-                : "nav-button"
-            }
-            onClick={() => setPage("chat")}
-          >
-            LLM Interface
-          </button>
-
-
-          <button
-            className={
-              page === "soc"
-                ? "nav-button active"
-                : "nav-button"
-            }
-            onClick={() => setPage("soc")}
-          >
-            SOC Dashboard
-          </button>
-
-
+        <div className="sidebar-foot">
           <div className="status">
+            <span
+              className={connected ? "status-dot" : "status-dot offline"}
+            ></span>
 
-            <span className="status-dot"></span>
-
-            System Online
-
+            {connected ? "System Online" : "Connecting…"}
           </div>
 
+          <div className="foot-note">
+            Real-time alerts {connected ? "connected" : "offline"}
+          </div>
         </div>
 
-      </header>
+      </aside>
 
 
-      {page === "chat" ? (
+      <div className="main">
 
-        <ChatPage
-          messages={messages}
-          setMessages={setMessages}
-          sessionId={sessionId}
+        {page === "chat" && (
+          <ChatPage
+            messages={messages}
+            setMessages={setMessages}
+            sessionId={sessionId}
+            onOpenRedTeam={() => setRedTeamOpen(true)}
+          />
+        )}
+
+        {page === "security" && <SecurityPage refreshKey={refreshKey} />}
+
+        {page === "soc" && (
+          <div className="page">
+            <SOCPage />
+          </div>
+        )}
+
+      </div>
+
+
+      {redTeamOpen && (
+        <RedTeamPanel
+          onClose={() => {
+            setRedTeamOpen(false);
+            setRefreshKey((key) => key + 1);
+          }}
         />
-
-      ) : (
-
-        <SOCPage />
-
       )}
+
+      <SecurityToast
+        alert={alert}
+        onClose={clearAlert}
+        onView={() => {
+          clearAlert();
+          setPage("security");
+        }}
+      />
 
     </div>
   );

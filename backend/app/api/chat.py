@@ -1,6 +1,7 @@
 import logging
+import os
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Header
 
 from app.detection.fast_filter import fast_filter
@@ -15,7 +16,8 @@ from app.intelligence.forensic import ForensicLogger
 from app.intelligence.kill_chain import KillChainTracker
 from app.intelligence.mitre import map_to_mitre_atlas
 
-from app.services.llm import generate_response, SYSTEM_PROMPT
+from app.services.llm import SYSTEM_PROMPT
+from app.services import chat_session
 from app.security.monitor import get_monitor
 from app.security.operator import is_operator
 from app.deception import conversation as honeypot_conversation
@@ -52,17 +54,72 @@ shadow_sessions = set()
 # Resilient analysis
 # --------------------------------------------------
 
-CREW_ATTEMPTS = 3
+CREW_ATTEMPTS = 2
+
+# CREW_ANALYSIS controls when the (slow, token-hungry) CrewAI agents run:
+#   suspicious (default)  only when the local detectors raise a flag
+#   always                every message
+#   off                   never; local detectors only
+# Benign messages therefore cost zero extra model calls and answer fast.
+SUSPICION_RISK = 0.4
+
+
+def local_analysis(message, filter_result, stateful_result):
+    """Sentry -> Analyst -> Orchestrator run directly: local, no LLM."""
+
+    sentry_result = sentry.analyze(message)
+
+    analyst_result = analyst.analyze(
+        message,
+        filter_result,
+        sentry_result,
+    )
+
+    orchestration_result = orchestrator.decide(
+        sentry_result,
+        analyst_result,
+        indirect_score=filter_result.get("indirect", {}).get("score", 0.0),
+        stateful_result=stateful_result,
+    )
+
+    return {
+        "crew_result": None,
+        "sentry": sentry_result,
+        "analyst": analyst_result,
+        "orchestrator": orchestration_result,
+    }
+
+
+def is_suspicious(local, filter_result, stateful_result) -> bool:
+    return bool(
+        filter_result.get("flagged")
+        or (stateful_result or {}).get("detected")
+        or local["sentry"].get("flagged")
+        or local["analyst"].get("risk_score", 0.0) >= SUSPICION_RISK
+        or local["orchestrator"].get("route") == "shadow"
+    )
 
 
 def analyze_with_fallback(message, filter_result, stateful_result):
     """
-    Run the CrewAI security analysis. The hosted model occasionally emits a
-    malformed tool call, which used to surface as an HTTP 500 and made the
-    chat look like the backend was down. Retry, and if CrewAI still fails
-    fall back to the same Sentry -> Analyst -> Orchestrator agents run
-    directly (deterministic, no LLM), so the defence never goes offline.
+    Security analysis, fast by default.
+
+    1. Local detectors always run (milliseconds, no model call).
+    2. CrewAI only runs for suspicious input (see CREW_ANALYSIS). The hosted
+       model sometimes emits a malformed tool call or hits its rate limit;
+       it is retried, and if it still fails the local result is used, so
+       the defence never goes offline and chat never returns an error.
     """
+
+    local = local_analysis(message, filter_result, stateful_result)
+
+    mode = os.getenv("CREW_ANALYSIS", "suspicious").strip().lower()
+
+    if mode == "off" or (
+        mode != "always"
+        and not is_suspicious(local, filter_result, stateful_result)
+    ):
+        return local, "local"
 
     for attempt in range(1, CREW_ATTEMPTS + 1):
         try:
@@ -83,30 +140,7 @@ def analyze_with_fallback(message, filter_result, stateful_result):
                 type(error).__name__,
             )
 
-    sentry_result = sentry.analyze(message)
-
-    analyst_result = analyst.analyze(
-        message,
-        filter_result,
-        sentry_result,
-    )
-
-    orchestration_result = orchestrator.decide(
-        sentry_result,
-        analyst_result,
-        indirect_score=filter_result.get("indirect", {}).get("score", 0.0),
-        stateful_result=stateful_result,
-    )
-
-    return (
-        {
-            "crew_result": None,
-            "sentry": sentry_result,
-            "analyst": analyst_result,
-            "orchestrator": orchestration_result,
-        },
-        "deterministic_fallback",
-    )
+    return local, "deterministic_fallback"
 
 
 # --------------------------------------------------
@@ -114,8 +148,11 @@ def analyze_with_fallback(message, filter_result, stateful_result):
 # --------------------------------------------------
 
 class ChatRequest(BaseModel):
-    message: str
-    session_id: str | None = None
+    message: str = Field(min_length=1, max_length=8000)
+    session_id: str | None = Field(default=None, max_length=100)
+
+    # Optional recent turns used to restore context after a server restart.
+    history: list[dict] | None = Field(default=None, max_length=40)
 
 
 # --------------------------------------------------
@@ -134,6 +171,8 @@ def chat(request: ChatRequest):
     # --------------------------------------------------
 
     session_id = request.session_id or "default"
+
+    chat_session.seed_history(session_id, request.history)
 
 
     # --------------------------------------------------
@@ -235,12 +274,13 @@ def chat(request: ChatRequest):
 
     else:
         try:
-            response = generate_response(request.message)
-        except Exception as error:
-            logger.warning("LLM call failed: %s", type(error).__name__)
+            response = chat_session.production_reply(
+                session_id, request.message
+            )
+        except Exception:
             response = (
-                "The language model is temporarily unavailable. "
-                "Please try again in a moment."
+                "Sorry, I'm having trouble responding right now. "
+                "Please try again in a few seconds."
             )
 
         decoy_result = None

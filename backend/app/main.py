@@ -1,3 +1,4 @@
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,6 +14,19 @@ from app.api.red_team import router as red_team_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Warm the local detectors in the background so the first real message
+    # does not pay the model-loading cost.
+    def warm_up():
+        try:
+            from app.api.chat import local_analysis
+            from app.detection.fast_filter import fast_filter
+
+            local_analysis("hello", fast_filter("hello"), None)
+        except Exception:
+            pass
+
+    threading.Thread(target=warm_up, daemon=True).start()
+
     yield
 
     # Let open Server-Sent-Event streams finish so shutdown / reload

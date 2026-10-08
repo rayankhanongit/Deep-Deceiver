@@ -169,6 +169,10 @@ function ChatPage({ messages, setMessages, sessionId, operator, onOpenRedTeam })
         body: JSON.stringify({
           message: userMessage,
           session_id: sessionId,
+          history: messages
+            .filter((m) => !m.error)
+            .slice(-10)
+            .map((m) => ({ role: m.role, content: m.content })),
         }),
       });
 

@@ -1,3 +1,5 @@
+import logging
+
 from pydantic import BaseModel
 from fastapi import APIRouter
 
@@ -22,6 +24,8 @@ from app.crew.runtime import DEEPDeceiverCrewRuntime
 
 router = APIRouter()
 
+logger = logging.getLogger("deep_deceiver.chat")
+
 
 # --------------------------------------------------
 # Initialize pipeline components
@@ -40,6 +44,67 @@ influxdb = InfluxDBService()
 # Session-specific components
 stateful_detectors = {}
 shadow_sessions = set()
+
+
+# --------------------------------------------------
+# Resilient analysis
+# --------------------------------------------------
+
+CREW_ATTEMPTS = 3
+
+
+def analyze_with_fallback(message, filter_result, stateful_result):
+    """
+    Run the CrewAI security analysis. The hosted model occasionally emits a
+    malformed tool call, which used to surface as an HTTP 500 and made the
+    chat look like the backend was down. Retry, and if CrewAI still fails
+    fall back to the same Sentry -> Analyst -> Orchestrator agents run
+    directly (deterministic, no LLM), so the defence never goes offline.
+    """
+
+    for attempt in range(1, CREW_ATTEMPTS + 1):
+        try:
+            return (
+                crew_runtime.analyze(
+                    text=message,
+                    fast_filter_result=filter_result,
+                    stateful_result=stateful_result,
+                ),
+                "crewai",
+            )
+
+        except Exception as error:
+            logger.warning(
+                "CrewAI analysis attempt %d/%d failed: %s",
+                attempt,
+                CREW_ATTEMPTS,
+                type(error).__name__,
+            )
+
+    sentry_result = sentry.analyze(message)
+
+    analyst_result = analyst.analyze(
+        message,
+        filter_result,
+        sentry_result,
+    )
+
+    orchestration_result = orchestrator.decide(
+        sentry_result,
+        analyst_result,
+        indirect_score=filter_result.get("indirect", {}).get("score", 0.0),
+        stateful_result=stateful_result,
+    )
+
+    return (
+        {
+            "crew_result": None,
+            "sentry": sentry_result,
+            "analyst": analyst_result,
+            "orchestrator": orchestration_result,
+        },
+        "deterministic_fallback",
+    )
 
 
 # --------------------------------------------------
@@ -97,9 +162,9 @@ def chat(request: ChatRequest):
     # 3–5. CrewAI Security Analysis
     # --------------------------------------------------
 
-    crew_result = crew_runtime.analyze(
-        text=request.message,
-        fast_filter_result=filter_result,
+    crew_result, analysis_engine = analyze_with_fallback(
+        message=request.message,
+        filter_result=filter_result,
         stateful_result=stateful_result,
     )
 
@@ -160,7 +225,14 @@ def chat(request: ChatRequest):
         environment = "shadow"
 
     else:
-        response = generate_response(request.message)
+        try:
+            response = generate_response(request.message)
+        except Exception as error:
+            logger.warning("LLM call failed: %s", type(error).__name__)
+            response = (
+                "The language model is temporarily unavailable. "
+                "Please try again in a moment."
+            )
 
         decoy_result = None
         response_source = "production"
@@ -221,6 +293,8 @@ def chat(request: ChatRequest):
         "kill_chain": kill_chain_result,
 
         "mitre": mitre_result,
+
+        "analysis_engine": analysis_engine,
     }
 
 
@@ -240,9 +314,12 @@ def chat(request: ChatRequest):
     # 11. Store Event
     # --------------------------------------------------
 
-    influxdb.write_event(
-        forensic_event
-    )
+    try:
+        influxdb.write_event(
+            forensic_event
+        )
+    except Exception as error:
+        logger.warning("Forensic event not stored: %s", type(error).__name__)
 
 
     # --------------------------------------------------

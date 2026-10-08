@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { API, prettyCategory } from "../api";
+import Logo from "../components/Logo";
 import DetectionDetails from "../components/DetectionDetails";
 import Markdown from "../components/Markdown";
 
@@ -42,6 +43,52 @@ function SecurityBadge({ security }) {
       {security.alert_triggered && (
         <span className="security-badge-alert">host alert sent</span>
       )}
+    </div>
+  );
+}
+
+function HoneypotNotice({ msg }) {
+  if (msg.responseSource !== "decoy") return null;
+
+  return (
+    <div className="honeypot-notice">
+      <div className="honeypot-title">
+        <span className="honeypot-icon">🍯</span>
+        HONEYPOT ENGAGED
+        <span className="honeypot-scan" />
+      </div>
+
+      <p>
+        This request was routed to the isolated shadow environment. The reply
+        below is synthetic decoy data; the production model and real systems
+        were never reached, and the attacker&apos;s behaviour is being recorded.
+      </p>
+    </div>
+  );
+}
+
+function ThreatBar({ messages }) {
+  const last = [...messages].reverse().find((m) => m.role === "assistant" && m.session);
+
+  const contained = last?.session?.status === "contained";
+  const level = last?.security?.level && last.security.level !== "UNKNOWN"
+    ? last.security.level
+    : "SAFE";
+
+  return (
+    <div className="threat-bar">
+      <span className={`pill ${contained ? "pill-warn" : "pill-ok"}`}>
+        <i className="pill-dot" />
+        {contained ? "Session contained (honeypot)" : "Session active"}
+      </span>
+
+      <span className={`pill pill-level sev-pill-${level}`}>
+        Threat level: {level}
+      </span>
+
+      <span className="pill pill-muted">
+        {messages.filter((m) => m.role === "user").length} message(s)
+      </span>
     </div>
   );
 }
@@ -154,11 +201,13 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
 
   return (
     <div className="chat-page">
+      <ThreatBar messages={messages} />
+
       <div className="chat-scroll">
         <div className="chat-column">
           {empty && (
             <div className="chat-hero">
-              <div className="hero-mark">✺</div>
+              <Logo size={72} className="hero-logo" />
 
               <h1>How can I help you today?</h1>
 
@@ -193,13 +242,16 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
                 <div className="user-bubble">{msg.content}</div>
               ) : (
                 <div className="assistant-row">
-                  <div className="avatar">✺</div>
+                  <div className="avatar"><Logo size={22} /></div>
 
                   <div className="assistant-content">
                     <SecurityBadge security={msg.security} />
+                    <HoneypotNotice msg={msg} />
 
                     {msg.error ? (
                       <div className="chat-error">{msg.content}</div>
+                    ) : msg.responseSource === "decoy" ? (
+                      <pre className="decoy-output">{msg.content}</pre>
                     ) : (
                       <Markdown text={msg.content} />
                     )}
@@ -233,7 +285,7 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
           {loading && (
             <div className="turn turn-assistant">
               <div className="assistant-row">
-                <div className="avatar pulse">✺</div>
+                <div className="avatar pulse"><Logo size={22} /></div>
 
                 <div className="assistant-content">
                   <div className="typing" aria-label="Processing">

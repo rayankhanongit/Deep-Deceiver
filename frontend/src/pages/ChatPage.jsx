@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   ArrowUp,
@@ -15,9 +15,6 @@ import DetectionDetails from "../components/DetectionDetails";
 import Markdown from "../components/Markdown";
 import Button from "../components/ui/Button";
 import { Badge, SeverityBadge, StatusBadge } from "../components/ui/Badge";
-
-// The cube visual (three.js) is loaded lazily so it never delays first paint.
-const CubeWave = lazy(() => import("../components/CubeWave"));
 
 // Ordinary users see neutral prompts; the attack demos are operator-only.
 const PUBLIC_SUGGESTIONS = [
@@ -243,7 +240,7 @@ function ChatPage({ messages, setMessages, sessionId, operator, onOpenRedTeam })
         onKeyDown={handleKeyDown}
         name="message"
         autoComplete="off"
-        placeholder="Ask anything…"
+        placeholder={operator ? "Message the model, or try an attack…" : "Ask anything…"}
         rows="1"
         disabled={loading}
       />
@@ -277,38 +274,34 @@ function ChatPage({ messages, setMessages, sessionId, operator, onOpenRedTeam })
   );
 
   return (
-    <div className={empty ? "chat-page is-empty" : "chat-page"}>
-      {operator && <ThreatBar messages={messages} />}
+    <div className={empty ? "chat-page is-home" : "chat-page"}>
+      {operator && !empty && <ThreatBar messages={messages} />}
 
       {empty ? (
-        <div className="chat-hero">
-          <Suspense fallback={null}>
-            <CubeWave className="hero-cubes" />
-          </Suspense>
-
-          <div className="hero-copy">
-            <h1>{operator ? "Operator console" : "How can I help?"}</h1>
+        <div className="home">
+          <div className="home-copy">
+            <h1>{operator ? "Test your model’s defenses." : "How can I help?"}</h1>
 
             <p>
               {operator
-                ? "Every message runs through the active-defense pipeline. Try an attack or start a Red Team assessment."
+                ? "Every message passes through the detection pipeline. Try an attack, or run a Red Team assessment."
                 : "Ask a question to get started."}
             </p>
           </div>
 
-          <div className="hero-composer">{composer}</div>
+          <div className="home-composer">{composer}</div>
 
-          <ul className="suggestions" aria-label="Suggested prompts">
+          <ul className="prompts" aria-label="Suggested prompts">
             {suggestions.map((text) => (
               <li key={text}>
                 <button
                   type="button"
-                  className="suggestion"
+                  className="prompt"
                   onClick={() => sendMessage(text)}
                   disabled={loading}
                 >
                   <span>{text}</span>
-                  <ArrowRight size={16} aria-hidden="true" />
+                  <ArrowRight size={18} aria-hidden="true" />
                 </button>
               </li>
             ))}

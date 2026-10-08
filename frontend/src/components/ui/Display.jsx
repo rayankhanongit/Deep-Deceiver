@@ -5,7 +5,7 @@ import { SEVERITY_TONE } from "./status";
 
 export function Card({ as: Tag = "section", className = "", children, ...props }) {
   return (
-    <Tag className={`card ${className}`} {...props}>
+    <Tag className={`glass ${className}`} {...props}>
       {children}
     </Tag>
   );
@@ -61,15 +61,15 @@ export function CountUp({ value, suffix = "", decimals }) {
   );
 }
 
-export function MetricCard({ label, value, suffix, tone, hint, icon: Icon, className = "" }) {
+export function MetricCard({ label, value, suffix, tone, icon: Icon, className = "" }) {
   return (
-    <div className={`metric ${tone ? `metric-${tone}` : ""} ${className}`} title={hint}>
-      <div className="metric-label">
-        {Icon && <Icon size={14} aria-hidden="true" />}
+    <div className={`stat ${tone ? `stat-${tone}` : ""} ${className}`}>
+      <div className="stat-label">
+        {Icon && <Icon size={18} aria-hidden="true" />}
         {label}
       </div>
 
-      <div className="metric-value">
+      <div className="stat-value">
         <CountUp value={value} suffix={suffix} />
       </div>
     </div>
@@ -77,7 +77,7 @@ export function MetricCard({ label, value, suffix, tone, hint, icon: Icon, class
 }
 
 /** Ring gauge; the level is written out so colour is never the only cue. */
-export function RiskMeter({ value, level, size = 168 }) {
+export function RiskMeter({ value, level, size = 220 }) {
   const radius = 62;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.max(0, Math.min(100, value));

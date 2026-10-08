@@ -183,9 +183,9 @@ function RedTeamPanel({ onClose }) {
   return (
     <Dialog
       title={title}
-      description="Adaptive adversarial testing of this application's own model. Nothing leaves the app."
+      description="Adaptive adversarial testing of this application’s own model. Nothing leaves the app."
       onClose={onClose}
-      size="lg"
+      variant="sheet"
     >
       {error && (
         <div className="form-error" role="alert">
@@ -323,7 +323,7 @@ function RedTeamPanel({ onClose }) {
               )}
 
               <div className="rt-summary">
-                <RiskMeter value={report.overall_risk_score} level={report.overall_risk} size={150} />
+                <RiskMeter value={report.overall_risk_score} level={report.overall_risk} size={190} />
 
                 <div className="rt-stats">
                   <div className="rt-stat">

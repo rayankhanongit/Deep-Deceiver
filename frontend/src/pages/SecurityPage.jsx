@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import {
   BellRing,
   ChevronRight,
@@ -13,10 +13,8 @@ import {
 import { formatTime, getJSON, postJSON, prettyCategory } from "../api";
 import Button from "../components/ui/Button";
 import { Badge, SeverityBadge, StatusBadge } from "../components/ui/Badge";
-import { Card, EmptyState, MetricCard, RiskMeter, Spinner } from "../components/ui/Display";
+import { EmptyState, MetricCard, RiskMeter, Spinner } from "../components/ui/Display";
 import { stateFor } from "../components/ui/status";
-
-const CubeWave = lazy(() => import("../components/CubeWave"));
 
 function levelFor(score) {
   if (score > 80) return "CRITICAL";
@@ -24,6 +22,28 @@ function levelFor(score) {
   if (score > 40) return "MEDIUM";
   if (score > 20) return "LOW";
   return "SAFE";
+}
+
+/** One plain sentence that answers "how are we doing?". */
+function verdictFor(stats) {
+  if (stats.total_attempts === 0) {
+    return {
+      title: "No attacks recorded",
+      text: "The model has not faced any attempts yet. Send one from the chat, or run a Red Team assessment.",
+    };
+  }
+
+  if (stats.successful_jailbreaks > 0) {
+    return {
+      title: `${stats.successful_jailbreaks} jailbreak${stats.successful_jailbreaks === 1 ? "" : "s"} got through`,
+      text: `The model resisted ${stats.model_robustness}% of attempts. Review the successful findings below.`,
+    };
+  }
+
+  return {
+    title: "Every attempt was stopped",
+    text: `${stats.blocked_attempts} attacks were blocked and none succeeded.`,
+  };
 }
 
 function EventRow({ event }) {
@@ -46,7 +66,7 @@ function EventRow({ event }) {
           aria-controls={bodyId}
           onClick={() => setOpen(!open)}
         >
-          <ChevronRight size={16} className="chev" aria-hidden="true" />
+          <ChevronRight size={20} className="chev" aria-hidden="true" />
 
           <span className="event-main">
             <span className="event-summary">{event.summary}</span>
@@ -127,8 +147,8 @@ function EventRow({ event }) {
 
 const FILTERS = [
   { id: "ALL", label: "All" },
-  { id: "MEDIUM", label: "Medium+" },
-  { id: "HIGH", label: "High+" },
+  { id: "MEDIUM", label: "Medium and up" },
+  { id: "HIGH", label: "High and up" },
   { id: "CRITICAL", label: "Critical" },
   { id: "HONEYPOT", label: "Honeypot" },
 ];
@@ -161,7 +181,7 @@ function SecurityPage({ refreshKey }) {
       );
       setError("");
     } catch {
-      setError("Unable to load security data. Is the backend running?");
+      setError("Connection failed. Check that the backend is running, then refresh.");
     }
   }, [filter]);
 
@@ -183,7 +203,7 @@ function SecurityPage({ refreshKey }) {
       await postJSON("/security/alerts/test");
       setTestSent(true);
     } catch {
-      setError("Test alert failed.");
+      setError("The test alert could not be sent. Check the backend log.");
     } finally {
       setTesting(false);
     }
@@ -195,7 +215,7 @@ function SecurityPage({ refreshKey }) {
         <div className="page-inner">
           {error ? (
             <div className="form-error" role="alert">
-              <CircleAlert size={16} aria-hidden="true" />
+              <CircleAlert size={20} aria-hidden="true" />
               {error}
             </div>
           ) : (
@@ -212,38 +232,21 @@ function SecurityPage({ refreshKey }) {
   const avg = stats.average_risk_score;
   const level = levelFor(avg);
   const attacked = stats.system_status !== "PROTECTED";
+  const verdict = verdictFor(stats);
 
   return (
     <div className="page">
       <div className="page-inner">
 
-        {/* ---------- hero band ---------- */}
-
-        <header className="sec-hero">
-          <Suspense fallback={null}>
-            <CubeWave className="sec-cubes" />
-          </Suspense>
-
-          <div className="sec-hero-copy">
+        <header className="mon-head">
+          <div>
             <h1>Security Monitor</h1>
-            <p>Jailbreak detection, risk scoring and Red Team results in one place.</p>
-
-            <div className="sec-hero-status">
-              {attacked ? (
-                <StatusBadge state="critical" label="Under attack" />
-              ) : (
-                <StatusBadge state="safe" label="Protected" />
-              )}
-
-              <span className="threat-level">
-                Threat level (15 min) <SeverityBadge level={stats.current_threat_level} />
-              </span>
-            </div>
+            <p>Detection, risk scoring and Red Team results for the model.</p>
           </div>
 
-          <div className="sec-hero-actions">
+          <div className="mon-actions">
             <Button variant="secondary" icon={BellRing} onClick={sendTest} disabled={testing}>
-              Send test host alert
+              Send test alert
             </Button>
 
             <Button variant="ghost" icon={RefreshCw} onClick={load}>
@@ -258,36 +261,38 @@ function SecurityPage({ refreshKey }) {
 
         {error && (
           <div className="form-error" role="alert">
-            <CircleAlert size={16} aria-hidden="true" />
+            <CircleAlert size={20} aria-hidden="true" />
             {error}
           </div>
         )}
 
-        {/* ---------- overview: meter + key numbers ---------- */}
+        {/* ---------- the one big surface: verdict + key numbers ---------- */}
 
-        <div className="overview">
-          <Card className="overview-risk">
-            <RiskMeter value={avg} level={level} />
+        <section className="mon-hero" aria-labelledby="verdict-title">
+          <RiskMeter value={avg} level={level} />
 
-            <div>
-              <h2>Average risk</h2>
-              <p>
-                Across <span className="num">{stats.total_attempts}</span> recorded attempts.
-                Model robustness is <strong className="num">{stats.model_robustness}%</strong>.
-              </p>
+          <div className="mon-verdict">
+            <h2 id="verdict-title">{verdict.title}</h2>
+            <p>{verdict.text}</p>
+
+            <div className="verdict-badges">
+              {attacked ? (
+                <StatusBadge state="critical" label="Under attack" />
+              ) : (
+                <StatusBadge state="safe" label="Protected" />
+              )}
+
+              <span>
+                Threat level, last 15 min <SeverityBadge level={stats.current_threat_level} />
+              </span>
             </div>
-          </Card>
+          </div>
 
-          <div className="overview-key">
-            <MetricCard
-              icon={Target}
-              label="Total attempts"
-              value={stats.total_attempts}
-              hint="All detected attack attempts, chat and Red Team"
-            />
+          <div className="mon-key">
+            <MetricCard icon={Target} label="Attack attempts" value={stats.total_attempts} />
             <MetricCard
               icon={ShieldCheck}
-              label="Blocked attempts"
+              label="Blocked"
               value={stats.blocked_attempts}
               tone="ok"
             />
@@ -296,19 +301,12 @@ function SecurityPage({ refreshKey }) {
               label="Successful jailbreaks"
               value={stats.successful_jailbreaks}
               tone={stats.successful_jailbreaks ? "crit" : ""}
-              hint="Attempts where the model violated a boundary"
             />
           </div>
-        </div>
+        </section>
 
-        <div className="overview-secondary">
-          <MetricCard
-            icon={Ghost}
-            label="Honeypot interactions"
-            value={stats.honeypot_interactions}
-            tone={stats.honeypot_interactions ? "warn" : ""}
-            hint="Messages from contained sessions that received decoy data"
-          />
+        <section className="mon-sub" aria-label="More measurements">
+          <MetricCard icon={Ghost} label="Honeypot interactions" value={stats.honeypot_interactions} />
           <MetricCard label="Contained sessions" value={stats.honeypot_sessions} />
           <MetricCard label="High-risk events" value={stats.high_risk_events} />
           <MetricCard
@@ -321,12 +319,12 @@ function SecurityPage({ refreshKey }) {
             value={stats.jailbreak_success_rate}
             suffix="%"
           />
-        </div>
+        </section>
 
         {/* ---------- categories ---------- */}
 
-        <Card className="panel">
-          <h2 className="panel-title">Attack categories</h2>
+        <section className="mon-section" aria-labelledby="cat-title">
+          <h2 id="cat-title">Attack categories</h2>
 
           {Object.keys(stats.by_category).length === 0 ? (
             <p className="muted">No attacks recorded yet.</p>
@@ -350,13 +348,13 @@ function SecurityPage({ refreshKey }) {
                 ))}
             </ul>
           )}
-        </Card>
+        </section>
 
         {/* ---------- events ---------- */}
 
-        <Card className="panel">
-          <div className="panel-head">
-            <h2 className="panel-title">Recent security events</h2>
+        <section className="mon-section" aria-labelledby="events-title">
+          <div className="mon-section-head">
+            <h2 id="events-title">Recent security events</h2>
 
             <div className="filters" role="group" aria-label="Filter events">
               {FILTERS.map(({ id, label }) => (
@@ -374,9 +372,9 @@ function SecurityPage({ refreshKey }) {
           </div>
 
           {events.length === 0 ? (
-            <EmptyState icon={ShieldCheck} title="No events here yet">
-              Send a jailbreak attempt in the chat or run a Red Team assessment to see
-              events appear.
+            <EmptyState icon={ShieldCheck} title="No events match this filter">
+              Send a jailbreak attempt in the chat or run a Red Team assessment and events
+              will appear here.
             </EmptyState>
           ) : (
             <ul className="events">
@@ -385,7 +383,7 @@ function SecurityPage({ refreshKey }) {
               ))}
             </ul>
           )}
-        </Card>
+        </section>
 
         <p className="foot-badge">
           <Badge tone="accent">Live</Badge> Refreshes every 5 seconds.

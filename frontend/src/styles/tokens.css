@@ -1,66 +1,103 @@
 /* =========================================================
-   Design tokens - one source of truth.
-   Direction: void-black with a violet tint, a single lavender
-   accent, semantic colours only for security states.
+   Design tokens - the single source of truth.
+
+   Direction (extracted from the reference):
+   - void-black field with a violet tint, never flat #000
+   - lavender light as the one identity colour
+   - big type, generous space, few containers
+   - semantic colours only for security state
 ========================================================= */
 
 :root {
   color-scheme: dark;
 
-  /* surfaces (violet-tinted neutrals, one hue family) */
-  --bg: #09080f;
-  --bg-raised: #0e0c16;
-  --surface: rgba(22, 19, 34, 0.72);
-  --surface-solid: #151221;
-  --surface-hover: rgba(34, 29, 52, 0.85);
-  --inset: rgba(6, 5, 12, 0.7);
+  /* ---- surfaces ---- */
+  --bg: #07060d;
+  --bg-raised: #0c0a15;
+  --glass: rgba(16, 13, 28, 0.62);
+  --glass-strong: rgba(14, 11, 25, 0.86);
+  --glass-hover: rgba(30, 24, 52, 0.7);
+  --inset: rgba(5, 4, 11, 0.62);
 
-  /* borders */
-  --border: rgba(167, 139, 250, 0.13);
-  --border-strong: rgba(167, 139, 250, 0.3);
+  /* ---- lines ---- */
+  --line: rgba(190, 170, 255, 0.12);
+  --line-strong: rgba(190, 170, 255, 0.28);
 
-  /* text (AA on --bg) */
-  --text: #ede9f8;
-  --text-muted: #a8a4bf;
-  --text-faint: #8a86a3;
+  /* ---- text (all AA or better on --bg) ---- */
+  --text: #f1eefb;
+  --text-soft: #c9c4de;
+  --text-muted: #a39eba;
+  --text-faint: #8d88a6;
 
-  /* the one accent */
+  /* ---- identity: violet / lavender ---- */
   --accent: #a78bfa;
-  --accent-strong: #8b5cf6;
-  --accent-soft: rgba(167, 139, 250, 0.14);
-  --accent-ink: #130c2b;
-  --focus: #c4b5fd;
+  --accent-bright: #c4b5fd;
+  --accent-deep: #7c5ce6;
+  --accent-wash: rgba(167, 139, 250, 0.12);
+  --accent-ink: #120a2a;
+  --focus: #d4c8ff;
 
-  /* security semantics */
-  --ok: #5fd3a0;
-  --ok-soft: rgba(95, 211, 160, 0.12);
-  --warn: #f2b84b;
-  --warn-soft: rgba(242, 184, 75, 0.12);
-  --crit: #f47280;
-  --crit-soft: rgba(244, 114, 128, 0.13);
-  --info: #9db4ff;
+  /* ---- security semantics ---- */
+  --ok: #62d6a4;
+  --ok-wash: rgba(98, 214, 164, 0.12);
+  --warn: #f3bb55;
+  --warn-wash: rgba(243, 187, 85, 0.12);
+  --crit: #f7737f;
+  --crit-wash: rgba(247, 115, 127, 0.14);
+  --info: #8fb2ff;
+  --info-wash: rgba(143, 178, 255, 0.12);
 
-  /* type */
+  /* ---- type ---- */
   --font: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Geist Mono Variable", ui-monospace, "Cascadia Code", Consolas, monospace;
 
-  /* shape: tighter inside, softer outside */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 16px;
-  --r-xl: 22px;
+  /* scale: nothing important below 15px */
+  --fs-small: 0.9375rem;                       /* 15 */
+  --fs-body: 1.0625rem;                        /* 17 */
+  --fs-lead: 1.25rem;                          /* 20 */
+  --fs-title: 1.5rem;                          /* 24 */
+  --fs-heading: clamp(1.75rem, 2.4vw, 2.25rem);/* 28-36 */
+  --fs-display: clamp(2.75rem, 6.2vw, 5.5rem); /* 44-88 */
+  --fs-metric: clamp(2.75rem, 4.4vw, 4rem);    /* 44-64 */
 
-  /* depth: violet-tinted shadows, single light from above */
-  --shadow-sm: 0 1px 2px rgba(10, 6, 24, 0.5);
-  --shadow-md: 0 8px 24px -8px rgba(12, 6, 34, 0.7);
-  --shadow-lg: 0 24px 60px -16px rgba(18, 8, 52, 0.85);
-  --glow: 0 0 0 1px var(--border-strong), 0 10px 40px -12px rgba(139, 92, 246, 0.45);
+  /* ---- spacing scale (4px base) ---- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 72px;
+  --s-9: 104px;
 
-  /* motion */
-  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --t-fast: 140ms;
-  --t-med: 240ms;
+  /* ---- shape ---- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 20px;
+  --r-xl: 32px;
 
-  --sidebar: 272px;
-  --content-max: 1180px;
+  /* ---- depth: violet-tinted, light from above ---- */
+  --shadow-md: 0 10px 30px -12px rgba(10, 5, 30, 0.8);
+  --shadow-lg: 0 30px 80px -20px rgba(14, 6, 44, 0.9);
+  --glow: 0 0 0 1px var(--line-strong), 0 14px 60px -14px rgba(124, 92, 230, 0.55);
+
+  /* ---- motion ---- */
+  --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+  --t-fast: 150ms;
+  --t-med: 260ms;
+  --t-slow: 420ms;
+
+  /* ---- layers ---- */
+  --z-stage: 0;
+  --z-content: 1;
+  --z-topbar: 40;
+  --z-scrim: 45;
+  --z-nav: 50;
+  --z-sheet: 60;
+  --z-toast: 80;
+
+  --content-max: 1240px;
+  --nav-width: 340px;
+  --nav-edge: 22px;
 }

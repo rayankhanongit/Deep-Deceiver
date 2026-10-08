@@ -1,10 +1,12 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   LayoutDashboard,
   Lock,
-  Menu,
   MessageSquare,
+  PanelLeft,
+  Pause,
+  Play,
   Plus,
   Radar,
   Trash2,
@@ -24,10 +26,10 @@ import "@fontsource-variable/geist-mono";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/ui.css";
-import "./styles/app.css";
-import "./styles/polish.css";
+import "./styles/layout.css";
 
-// Operator-only screens are code-split: ordinary visitors never download them.
+// Heavy / operator-only code is split out of the first load.
+const CubeWave = lazy(() => import("./components/CubeWave"));
 const SecurityPage = lazy(() => import("./pages/SecurityPage"));
 const SOCPage = lazy(() => import("./pages/SOCPage"));
 const RedTeamPanel = lazy(() => import("./components/RedTeamPanel"));
@@ -40,6 +42,8 @@ const OPERATOR_NAV = [
 
 const STORE_KEY = "dd_conversations_v1";
 const NEW_TITLE = "New chat";
+const NAV_CLOSE_DELAY = 520;
+const MOTION_KEY = "dd_motion_paused";
 
 function newConversation() {
   return {
@@ -92,7 +96,82 @@ function groupLabel(timestamp) {
 function App() {
 
   const [page, setPage] = useState("chat");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Background animation can be paused (it autoplays for longer than 5 s).
+  const [motionPaused, setMotionPaused] = useState(() => {
+    try {
+      return localStorage.getItem(MOTION_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleMotion = () => {
+    setMotionPaused((paused) => {
+      try {
+        localStorage.setItem(MOTION_KEY, paused ? "0" : "1");
+      } catch {
+        /* storage unavailable */
+      }
+
+      return !paused;
+    });
+  };
+
+  // ---- auto-hiding navigation -------------------------------------------
+  // `open` is what the sidebar shows. It opens when the pointer reaches the
+  // left edge (or the toggle is used) and closes after a short delay once the
+  // pointer has left the whole nav zone, so crossing the gap between the edge
+  // trigger and the panel never flickers.
+  const [navOpen, setNavOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const closeTimer = useRef(null);
+  const sidebarRef = useRef(null);
+  const toggleRef = useRef(null);
+
+  const cancelClose = () => clearTimeout(closeTimer.current);
+
+  const scheduleClose = useCallback(() => {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setNavOpen(false), NAV_CLOSE_DELAY);
+  }, []);
+
+  const closeNav = useCallback(() => {
+    clearTimeout(closeTimer.current);
+    setPinned(false);
+    setNavOpen(false);
+  }, []);
+
+  const onZoneEnter = (event) => {
+    if (event.pointerType !== "mouse") return;
+
+    cancelClose();
+    setNavOpen(true);
+  };
+
+  const onZoneLeave = (event) => {
+    if (event.pointerType !== "mouse" || pinned) return;
+
+    scheduleClose();
+  };
+
+  const toggleNav = () => {
+    if (navOpen) {
+      closeNav();
+      return;
+    }
+
+    cancelClose();
+    setPinned(true);
+    setNavOpen(true);
+  };
+
+  // keyboard users: opening with the toggle moves focus into the panel
+  useEffect(() => {
+    if (navOpen && pinned) {
+      sidebarRef.current?.querySelector("button, a")?.focus();
+    }
+  }, [navOpen, pinned]);
 
   // Destructive actions need a second click (auto-cancels after 4 s).
   const [confirmId, setConfirmId] = useState(null);
@@ -193,13 +272,13 @@ function App() {
     }
 
     setPage("chat");
-    setDrawerOpen(false);
-  }, [conversations]);
+    closeNav();
+  }, [conversations, closeNav]);
 
   const openConversation = (id) => {
     setActiveId(id);
     setPage("chat");
-    setDrawerOpen(false);
+    closeNav();
   };
 
   const deleteConversation = (id) => {
@@ -236,7 +315,7 @@ function App() {
   }, [conversations, activeId]);
 
   // Ctrl/Cmd + K: new chat.  Ctrl/Cmd + Shift + O: operator unlock/lock
-  // (intentionally has no visible button).  Escape closes the drawer.
+  // (intentionally has no visible button).  Escape closes the navigation.
   useEffect(() => {
     const onKey = (event) => {
       const mod = event.ctrlKey || event.metaKey;
@@ -253,162 +332,203 @@ function App() {
       } else if (mod && key === "k") {
         event.preventDefault();
         newChat();
-      } else if (event.key === "Escape") {
-        setDrawerOpen(false);
+      } else if (event.key === "Escape" && navOpen) {
+        closeNav();
+        toggleRef.current?.focus();
       }
     };
 
     window.addEventListener("keydown", onKey);
 
     return () => window.removeEventListener("keydown", onKey);
-  }, [operator, lock, newChat]);
+  }, [operator, lock, newChat, navOpen, closeNav]);
 
   const closeRedTeam = useCallback(() => {
     setRedTeamOpen(false);
     setRefreshKey((key) => key + 1);
   }, []);
 
+  // The cube stage is the hero on the empty chat and a quiet backdrop elsewhere.
+  const stageMode = page === "chat" && messages.length === 0 ? "home" : "ambient";
+
   return (
     <div className="shell">
 
       <a className="skip-link" href="#main">Skip to content</a>
 
+      {/* ---------- stage ---------- */}
+
+      <Suspense fallback={<div className="stage" data-mode={stageMode} aria-hidden="true" />}>
+        <CubeWave mode={stageMode} paused={motionPaused} />
+      </Suspense>
+
+      {/* ---------- top bar ---------- */}
+
       <header className="topbar">
-        <Button
-          variant="ghost"
-          size="icon"
-          icon={Menu}
-          label="Open navigation"
-          aria-expanded={drawerOpen}
+        <button
+          ref={toggleRef}
+          type="button"
+          className="nav-toggle"
+          onClick={toggleNav}
+          aria-label={navOpen ? "Close navigation" : "Open navigation"}
+          aria-expanded={navOpen}
           aria-controls="sidebar"
-          onClick={() => setDrawerOpen(true)}
-        />
+        >
+          <PanelLeft size={22} aria-hidden="true" />
+        </button>
 
         <div className="topbar-brand">
-          <Logo size={24} />
+          <Logo size={30} />
           <span translate="no">DEEP-DECEIVER</span>
+        </div>
+
+        <div className="topbar-end">
+          {operator && (
+            <div className="topbar-live" role="status">
+              <span className={connected ? "live-dot on" : "live-dot"} aria-hidden="true" />
+              {connected ? "Live alerts on" : "Connecting…"}
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="nav-toggle"
+            onClick={toggleMotion}
+            aria-pressed={motionPaused}
+            aria-label={motionPaused ? "Resume background animation" : "Pause background animation"}
+            title={motionPaused ? "Resume background animation" : "Pause background animation"}
+          >
+            {motionPaused ? <Play size={20} aria-hidden="true" /> : <Pause size={20} aria-hidden="true" />}
+          </button>
         </div>
       </header>
 
-      {drawerOpen && (
+      {/* ---------- auto-hiding navigation ---------- */}
+
+      {navOpen && pinned && (
         <button
           type="button"
           className="scrim"
-          onClick={() => setDrawerOpen(false)}
+          onClick={closeNav}
           aria-label="Close navigation"
           tabIndex={-1}
         />
       )}
 
-      <aside
-        id="sidebar"
-        className={drawerOpen ? "sidebar open" : "sidebar"}
-        aria-label="Navigation"
+      <div
+        className={navOpen ? "nav-zone open" : "nav-zone"}
+        onPointerEnter={onZoneEnter}
+        onPointerLeave={onZoneLeave}
       >
+        <span className="nav-edge" aria-hidden="true" />
 
-        <div className="brand">
-          <Logo size={30} />
+        <aside
+          id="sidebar"
+          ref={sidebarRef}
+          className="sidebar"
+          aria-label="Navigation"
+          inert={!navOpen}
+        >
+          <div className="brand">
+            <Logo size={36} />
 
-          <div>
-            <strong translate="no">DEEP-DECEIVER</strong>
-            <span>{operator ? "Operator view" : "Assistant"}</span>
+            <div>
+              <strong translate="no">DEEP-DECEIVER</strong>
+              <span>{operator ? "Operator view" : "Assistant"}</span>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon drawer-close"
+              onClick={closeNav}
+              aria-label="Close navigation"
+            >
+              <X size={22} aria-hidden="true" />
+            </button>
           </div>
 
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon drawer-close"
-            onClick={() => setDrawerOpen(false)}
-            aria-label="Close navigation"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </div>
+          <Button variant="primary" icon={Plus} className="new-chat" onClick={newChat}>
+            New chat <kbd>Ctrl&nbsp;K</kbd>
+          </Button>
 
-        <Button variant="secondary" icon={Plus} className="new-chat" onClick={newChat}>
-          New chat <kbd>Ctrl&nbsp;K</kbd>
-        </Button>
+          {operator && (
+            <nav className="side-nav" aria-label="Sections">
+              {OPERATOR_NAV.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={page === id ? "side-link active" : "side-link"}
+                  aria-current={page === id ? "page" : undefined}
+                  onClick={() => {
+                    setPage(id);
+                    closeNav();
+                  }}
+                >
+                  <Icon size={20} aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
+            </nav>
+          )}
 
-        {operator && (
-          <nav className="side-nav" aria-label="Sections">
-            {OPERATOR_NAV.map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                className={page === id ? "side-link active" : "side-link"}
-                aria-current={page === id ? "page" : undefined}
-                onClick={() => {
-                  setPage(id);
-                  setDrawerOpen(false);
-                }}
-              >
-                <Icon size={17} aria-hidden="true" />
-                {label}
-              </button>
+          <nav className="chat-list" aria-label="Chats">
+            {grouped.map((group) => (
+              <div key={group.label}>
+                <h2 className="chat-group">{group.label}</h2>
+
+                {group.items.map((c) => {
+                  const current = c.id === activeId && page === "chat";
+
+                  return (
+                    <div key={c.id} className={current ? "chat-item active" : "chat-item"}>
+                      <button
+                        type="button"
+                        className="chat-item-title"
+                        aria-current={current ? "page" : undefined}
+                        onClick={() => openConversation(c.id)}
+                        title={c.title}
+                      >
+                        {c.title}
+                      </button>
+
+                      {confirmId === c.id ? (
+                        <button
+                          type="button"
+                          className="chat-item-delete confirm"
+                          onClick={() => deleteConversation(c.id)}
+                          aria-label={`Confirm delete chat: ${c.title}`}
+                        >
+                          <Check size={16} aria-hidden="true" /> Delete?
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="chat-item-delete"
+                          onClick={() => setConfirmId(c.id)}
+                          aria-label={`Delete chat: ${c.title}`}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             ))}
           </nav>
-        )}
 
-        <nav className="chat-list" aria-label="Chats">
-          {grouped.map((group) => (
-            <div key={group.label}>
-              <h2 className="chat-group">{group.label}</h2>
-
-              {group.items.map((c) => {
-                const current = c.id === activeId && page === "chat";
-
-                return (
-                  <div key={c.id} className={current ? "chat-item active" : "chat-item"}>
-                    <button
-                      type="button"
-                      className="chat-item-title"
-                      aria-current={current ? "page" : undefined}
-                      onClick={() => openConversation(c.id)}
-                      title={c.title}
-                    >
-                      {c.title}
-                    </button>
-
-                    {confirmId === c.id ? (
-                      <button
-                        type="button"
-                        className="chat-item-delete confirm"
-                        onClick={() => deleteConversation(c.id)}
-                        aria-label={`Confirm delete chat: ${c.title}`}
-                      >
-                        <Check size={14} aria-hidden="true" /> Delete?
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="chat-item-delete"
-                        onClick={() => setConfirmId(c.id)}
-                        aria-label={`Delete chat: ${c.title}`}
-                      >
-                        <Trash2 size={14} aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+          {operator && (
+            <div className="sidebar-foot">
+              <Button variant="ghost" size="sm" icon={Lock} onClick={lock}>
+                Lock operator view
+              </Button>
             </div>
-          ))}
-        </nav>
+          )}
+        </aside>
+      </div>
 
-        {operator && (
-          <div className="sidebar-foot">
-            <div className="live" role="status">
-              <span className={connected ? "live-dot on" : "live-dot"} aria-hidden="true" />
-              {connected ? "Live alerts connected" : "Connecting to alerts…"}
-            </div>
 
-            <Button variant="ghost" size="sm" icon={Lock} onClick={lock}>
-              Lock operator view
-            </Button>
-          </div>
-        )}
-
-      </aside>
-
+      {/* ---------- content ---------- */}
 
       <main id="main" className="main" tabIndex="-1">
 

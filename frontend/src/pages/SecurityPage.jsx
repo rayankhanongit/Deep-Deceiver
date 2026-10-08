@@ -133,6 +133,13 @@ function EventRow({ event }) {
                 : "no"}
             </dd>
 
+            {event.details?.contained && (
+              <>
+                <dt>Honeypot</dt>
+                <dd>Attacker was served decoy data (they are not told)</dd>
+              </>
+            )}
+
             <dt>Host alert</dt>
             <dd>{event.alert_triggered ? "sent" : "not triggered"}</dd>
 
@@ -176,7 +183,9 @@ function SecurityPage({ refreshKey }) {
   const load = useCallback(async () => {
     try {
       const query =
-        filter === "ALL" ? "" : `&min_severity=${filter.toLowerCase()}`;
+        filter === "ALL" || filter === "HONEYPOT"
+          ? ""
+          : `&min_severity=${filter.toLowerCase()}`;
 
       const [statsData, eventsData] = await Promise.all([
         getJSON("/security/stats"),
@@ -184,7 +193,11 @@ function SecurityPage({ refreshKey }) {
       ]);
 
       setStats(statsData);
-      setEvents(eventsData.events);
+      setEvents(
+        filter === "HONEYPOT"
+          ? eventsData.events.filter((e) => e.details?.contained)
+          : eventsData.events
+      );
       setError("");
     } catch {
       setError("Unable to load security data. Is the backend running?");
@@ -284,6 +297,13 @@ function SecurityPage({ refreshKey }) {
             value={stats.successful_jailbreaks}
             tone={stats.successful_jailbreaks ? "bad" : ""}
           />
+          <Metric
+            label="Honeypot Interactions"
+            value={stats.honeypot_interactions}
+            tone={stats.honeypot_interactions ? "warn" : ""}
+            hint="Messages from contained sessions that received decoy data"
+          />
+          <Metric label="Contained Sessions" value={stats.honeypot_sessions} />
           <Metric label="High Risk Events" value={stats.high_risk_events} />
           <Metric
             label="Critical Events"
@@ -351,13 +371,17 @@ function SecurityPage({ refreshKey }) {
             <h2>Recent Security Events</h2>
 
             <div className="filters">
-              {["ALL", "MEDIUM", "HIGH", "CRITICAL"].map((level) => (
+              {["ALL", "MEDIUM", "HIGH", "CRITICAL", "HONEYPOT"].map((level) => (
                 <button
                   key={level}
                   className={filter === level ? "chip active" : "chip"}
                   onClick={() => setFilter(level)}
                 >
-                  {level === "ALL" ? "All" : `${level}+`}
+                  {level === "ALL"
+                    ? "All"
+                    : level === "HONEYPOT"
+                    ? "🍯 Honeypot"
+                    : `${level}+`}
                 </button>
               ))}
             </div>

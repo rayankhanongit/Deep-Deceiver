@@ -1,9 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 
-import { API, prettyCategory } from "../api";
+import { API, authHeaders, prettyCategory } from "../api";
 import Logo from "../components/Logo";
 import DetectionDetails from "../components/DetectionDetails";
 import Markdown from "../components/Markdown";
+
+// Ordinary users see neutral prompts; the attack demos are operator-only.
+const PUBLIC_SUGGESTIONS = [
+  {
+    title: "System status",
+    text: "Give me a summary of today's system status.",
+  },
+  {
+    title: "Access request",
+    text: "How do I request access to the staging servers?",
+  },
+  {
+    title: "Troubleshooting",
+    text: "Why might a user be unable to log in after a password reset?",
+  },
+];
 
 const SUGGESTIONS = [
   {
@@ -113,7 +129,7 @@ function CopyButton({ text }) {
   );
 }
 
-function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
+function ChatPage({ messages, setMessages, sessionId, operator, onOpenRedTeam }) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -148,6 +164,7 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...authHeaders(),
         },
         body: JSON.stringify({
           message: userMessage,
@@ -201,7 +218,7 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
 
   return (
     <div className="chat-page">
-      <ThreatBar messages={messages} />
+      {operator && <ThreatBar messages={messages} />}
 
       <div className="chat-scroll">
         <div className="chat-column">
@@ -212,13 +229,13 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
               <h1>How can I help you today?</h1>
 
               <p>
-                Every message passes through the active-defense pipeline:
-                Fast Filter, Sentry, Analyst, Orchestrator and the jailbreak
-                monitor.
+                {operator
+                  ? "Operator view: every message passes through the active-defense pipeline and the jailbreak monitor."
+                  : "Ask a question to get started."}
               </p>
 
               <div className="suggestions">
-                {SUGGESTIONS.map((item) => (
+                {(operator ? SUGGESTIONS : PUBLIC_SUGGESTIONS).map((item) => (
                   <button
                     key={item.title}
                     className="suggestion"
@@ -245,13 +262,11 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
                   <div className="avatar"><Logo size={22} /></div>
 
                   <div className="assistant-content">
-                    <SecurityBadge security={msg.security} />
-                    <HoneypotNotice msg={msg} />
+                    {operator && <SecurityBadge security={msg.security} />}
+                    {operator && <HoneypotNotice msg={msg} />}
 
                     {msg.error ? (
                       <div className="chat-error">{msg.content}</div>
-                    ) : msg.responseSource === "decoy" ? (
-                      <pre className="decoy-output">{msg.content}</pre>
                     ) : (
                       <Markdown text={msg.content} />
                     )}
@@ -262,7 +277,7 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
                       </div>
                     )}
 
-                    {msg.detection && (
+                    {operator && msg.detection && (
                       <details className="security-details">
                         <summary>
                           Security analysis
@@ -316,6 +331,7 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
           />
 
           <div className="composer-bar">
+            {operator ? (
             <button
               className="redteam-button"
               onClick={onOpenRedTeam}
@@ -323,6 +339,9 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
             >
               ⚔ Red Team
             </button>
+            ) : (
+              <span />
+            )}
 
             <button
               className="send-button"
@@ -336,8 +355,9 @@ function ChatPage({ messages, setMessages, sessionId, onOpenRedTeam }) {
         </div>
 
         <div className="composer-note">
-          Protected environment · Detection pipeline: Fast Filter + Sentry +
-          Analyst + Orchestrator · Jailbreak monitor active
+          {operator
+            ? "Operator view · security details are visible only to you"
+            : "Responses may contain errors. Verify important information."}
         </div>
       </div>
     </div>

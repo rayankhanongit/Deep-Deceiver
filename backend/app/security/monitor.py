@@ -113,6 +113,7 @@ class SecurityMonitor:
         response: str = "",
         reason: str = "",
         extra: dict | None = None,
+        summary: str | None = None,
     ) -> dict:
         """Build, log, store and (if warranted) alert on one event."""
 
@@ -140,7 +141,7 @@ class SecurityMonitor:
                 else None
             ),
             jailbreak_success=(outcome == "SUCCESS"),
-            summary=SUMMARIES.get(outcome, "{category}").format(
+            summary=summary or SUMMARIES.get(outcome, "{category}").format(
                 category=category.replace("_", " ")
             ),
             details={
@@ -200,7 +201,7 @@ class SecurityMonitor:
                 analyst_result=analyst_result,
             )
 
-            if not detection["is_attack"]:
+            if not detection["is_attack"] and not routed_to_shadow:
                 return {
                     "level": "SAFE",
                     "is_attack": False,
@@ -210,7 +211,16 @@ class SecurityMonitor:
                     "event_id": None,
                 }
 
-            category = detection["category"]
+            # Every message from a contained session is attacker activity
+            # the operator wants to follow, even harmless-looking follow-ups.
+            category = (
+                detection["category"]
+                if detection["is_attack"]
+                else "follow_up_activity"
+            )
+
+            if not detection["is_attack"]:
+                detection = {**detection, "confidence": max(detection["confidence"], 0.5)}
 
             if routed_to_shadow:
                 # The defence contained the request: the real model never
@@ -243,6 +253,9 @@ class SecurityMonitor:
                 source="chat",
             )
 
+            if routed_to_shadow and risk["risk_score"] <= 20:
+                risk = {**risk, "risk_score": 21, "severity": "LOW"}
+
             # Only record events worth a human's attention.
             if risk["risk_score"] <= 20:
                 return {
@@ -265,6 +278,11 @@ class SecurityMonitor:
                 prompt=message,
                 response=response,
                 reason=verdict["reason"] if verdict else "Request was contained in the shadow environment.",
+                summary=(
+                    f"Attacker interaction served decoy data ({category.replace('_', ' ')})"
+                    if routed_to_shadow
+                    else None
+                ),
                 extra={
                     "detector_level": detection["level"],
                     "detector_risk": detection["risk_score"],

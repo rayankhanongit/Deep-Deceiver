@@ -2,7 +2,7 @@ import asyncio
 import json
 import queue
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -11,11 +11,13 @@ from app.security.config import get_settings
 from app.security.models import SEVERITIES
 from app.security.monitor import get_monitor
 from app.security.notifications import notification_service
+from app.security.operator import require_operator
 
 
 router = APIRouter(
     prefix="/security",
-    tags=["Security"]
+    tags=["Security"],
+    dependencies=[Depends(require_operator)],
 )
 
 

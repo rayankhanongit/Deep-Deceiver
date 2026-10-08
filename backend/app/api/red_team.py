@@ -1,12 +1,14 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.red_team.service import assessment_service
+from app.security.operator import require_operator
 
 
 router = APIRouter(
     prefix="/red-team",
-    tags=["Red Team"]
+    tags=["Red Team"],
+    dependencies=[Depends(require_operator)],
 )
 
 

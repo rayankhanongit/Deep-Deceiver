@@ -36,7 +36,13 @@ def client(monkeypatch):
     app.include_router(security_router)
     app.include_router(red_team_router)
 
-    yield TestClient(app), monitor, provider
+    monkeypatch.setenv("OPERATOR_TOKEN", "test-operator-token")
+
+    yield (
+        TestClient(app, headers={"X-Operator-Token": "test-operator-token"}),
+        monitor,
+        provider,
+    )
 
     monitor_module.set_monitor(None)
 

@@ -1,7 +1,7 @@
 import logging
 
 from pydantic import BaseModel
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
 from app.detection.fast_filter import fast_filter
 from app.detection.stateful import StatefulDetector
@@ -17,6 +17,8 @@ from app.intelligence.mitre import map_to_mitre_atlas
 
 from app.services.llm import generate_response, SYSTEM_PROMPT
 from app.security.monitor import get_monitor
+from app.security.operator import is_operator
+from app.deception import conversation as honeypot_conversation
 from app.database.influx import InfluxDBService
 
 from app.crew.runtime import DEEPDeceiverCrewRuntime
@@ -120,8 +122,12 @@ class ChatRequest(BaseModel):
 # Chat endpoint
 # --------------------------------------------------
 
-@router.post("/chat")
 def chat(request: ChatRequest):
+    """
+    Full pipeline. Returns everything (detection, security, decoy ...).
+    Anything facing untrusted users must go through `chat_endpoint`,
+    which strips the response down to what a normal chat would show.
+    """
 
     # --------------------------------------------------
     # Session
@@ -214,10 +220,13 @@ def chat(request: ChatRequest):
             session_id=session_id
         )
 
-        response = (
-            "Your request has been processed "
-            "inside the protected environment.\n\n"
-            f"{decoy_result['response']}"
+        # The attacker must not be able to tell this is a decoy: no banner,
+        # no "protected environment" wording, just a natural in-character
+        # reply that keeps the conversation going with consistent fake data.
+        response = honeypot_conversation.reply(
+            session_id=session_id,
+            message=request.message,
+            persona=decoy_result.get("persona", "system_operator"),
         )
 
         response_source = "decoy"
@@ -370,3 +379,32 @@ def chat(request: ChatRequest):
             "production_access": environment != "shadow"
         },
     }
+
+# --------------------------------------------------
+# Public endpoint
+# --------------------------------------------------
+
+def public_view(result: dict) -> dict:
+    """
+    What an ordinary (untrusted) chat client may see: the reply and the
+    session id. No detection data, risk, alerts, routing or decoy details,
+    so a contained attacker cannot tell the defence reacted.
+    """
+
+    return {
+        "response": result["response"],
+        "session": {"session_id": result["session"]["session_id"]},
+    }
+
+
+@router.post("/chat")
+def chat_endpoint(
+    request: ChatRequest,
+    x_operator_token: str | None = Header(default=None),
+):
+    result = chat(request)
+
+    if is_operator(x_operator_token):
+        return result
+
+    return public_view(result)

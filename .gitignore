@@ -58,3 +58,8 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+
+# Backend runtime logs (request logs can contain query-string tokens)
+backend/logs/

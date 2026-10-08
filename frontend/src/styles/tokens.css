@@ -1,0 +1,66 @@
+/* =========================================================
+   Design tokens - one source of truth.
+   Direction: void-black with a violet tint, a single lavender
+   accent, semantic colours only for security states.
+========================================================= */
+
+:root {
+  color-scheme: dark;
+
+  /* surfaces (violet-tinted neutrals, one hue family) */
+  --bg: #09080f;
+  --bg-raised: #0e0c16;
+  --surface: rgba(22, 19, 34, 0.72);
+  --surface-solid: #151221;
+  --surface-hover: rgba(34, 29, 52, 0.85);
+  --inset: rgba(6, 5, 12, 0.7);
+
+  /* borders */
+  --border: rgba(167, 139, 250, 0.13);
+  --border-strong: rgba(167, 139, 250, 0.3);
+
+  /* text (AA on --bg) */
+  --text: #ede9f8;
+  --text-muted: #a8a4bf;
+  --text-faint: #8a86a3;
+
+  /* the one accent */
+  --accent: #a78bfa;
+  --accent-strong: #8b5cf6;
+  --accent-soft: rgba(167, 139, 250, 0.14);
+  --accent-ink: #130c2b;
+  --focus: #c4b5fd;
+
+  /* security semantics */
+  --ok: #5fd3a0;
+  --ok-soft: rgba(95, 211, 160, 0.12);
+  --warn: #f2b84b;
+  --warn-soft: rgba(242, 184, 75, 0.12);
+  --crit: #f47280;
+  --crit-soft: rgba(244, 114, 128, 0.13);
+  --info: #9db4ff;
+
+  /* type */
+  --font: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono Variable", ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  /* shape: tighter inside, softer outside */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  /* depth: violet-tinted shadows, single light from above */
+  --shadow-sm: 0 1px 2px rgba(10, 6, 24, 0.5);
+  --shadow-md: 0 8px 24px -8px rgba(12, 6, 34, 0.7);
+  --shadow-lg: 0 24px 60px -16px rgba(18, 8, 52, 0.85);
+  --glow: 0 0 0 1px var(--border-strong), 0 10px 40px -12px rgba(139, 92, 246, 0.45);
+
+  /* motion */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --t-fast: 140ms;
+  --t-med: 240ms;
+
+  --sidebar: 272px;
+  --content-max: 1180px;
+}

@@ -1,0 +1,96 @@
+/* =========================================================
+   Guideline fixes: touch, overscroll, safe areas, perf, confirm delete.
+   Loaded last so it can refine app.css.
+========================================================= */
+
+button,
+a,
+label,
+summary,
+input,
+textarea {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(167, 139, 250, 0.2);
+}
+
+.dialog,
+.dialog-body,
+.sidebar,
+.chat-list,
+.chat-scroll {
+  overscroll-behavior: contain;
+}
+
+@media (pointer: fine) {
+  html {
+    overscroll-behavior: none;
+  }
+}
+
+/* bars animate transform, not width */
+.cat-fill,
+.bar-fill {
+  width: 100%;
+  transform-origin: left center;
+  transition: transform 700ms var(--ease);
+}
+
+.suggestion {
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+
+.suggestion:hover:not(:disabled) {
+  padding-left: 14px;
+}
+
+/* long event lists render lazily */
+.event {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 54px;
+}
+
+.composer-wrap {
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+}
+
+.topbar {
+  padding-top: max(8px, env(safe-area-inset-top));
+}
+
+.drawer-close {
+  display: none;
+  margin-left: auto;
+}
+
+.chat-item-delete.confirm {
+  width: auto;
+  gap: 4px;
+  padding: 0 8px;
+  opacity: 1;
+  background: var(--crit-soft);
+  color: #ffc4cb;
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+button.scrim {
+  border: 0;
+  padding: 0;
+}
+
+@media (max-width: 860px) {
+  .drawer-close {
+    display: inline-flex;
+  }
+
+  .sec-cubes {
+    opacity: 0.35;
+  }
+}
+
+/* tablet: keep the three key metrics in a row */
+@media (max-width: 860px) and (min-width: 561px) {
+  .overview-key {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { CircleAlert, KeyRound } from "lucide-react";
 
 import { getJSON, setOperatorToken } from "../api";
+import Button from "./ui/Button";
+import Dialog from "./ui/Dialog";
 
 function OperatorUnlock({ onClose, onUnlocked }) {
   const [token, setToken] = useState("");
@@ -21,58 +24,61 @@ function OperatorUnlock({ onClose, onUnlocked }) {
       onUnlocked();
     } catch {
       setOperatorToken("");
-      setError("Invalid operator token.");
+      setError("That token wasn't accepted. Check OPERATOR_TOKEN in your .env file.");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
-      <form
-        className="modal unlock-modal"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="modal-head">
-          <div>
-            <h2>Operator access</h2>
-            <p>Enter the operator token from your .env file.</p>
-          </div>
-
-          <button
-            type="button"
-            className="icon-button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
+    <Dialog
+      title="Operator access"
+      description="Enter the operator token from your .env file to open the security views."
+      onClose={onClose}
+      size="sm"
+    >
+      <form onSubmit={submit} noValidate>
+        <label className="field-label" htmlFor="operator-token">
+          Operator token
+        </label>
 
         <input
-          className="token-input"
+          id="operator-token"
+          className="field-input"
           type="password"
+          name="operator-token"
           value={token}
           onChange={(event) => setToken(event.target.value)}
-          placeholder="OPERATOR_TOKEN"
-          autoFocus
           autoComplete="off"
+          spellCheck={false}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "operator-error" : undefined}
+          data-autofocus
         />
 
-        {error && <div className="form-error">{error}</div>}
+        {error && (
+          <div id="operator-error" className="form-error" role="alert">
+            <CircleAlert size={16} aria-hidden="true" />
+            {error}
+          </div>
+        )}
 
-        <div className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={onClose}>
+        <div className="dialog-actions">
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
+          </Button>
 
-          <button className="btn-primary" disabled={busy || !token.trim()}>
-            Unlock
-          </button>
+          <Button
+            variant="primary"
+            type="submit"
+            icon={KeyRound}
+            disabled={busy || !token.trim()}
+          >
+            {busy ? "Checking…" : "Unlock"}
+          </Button>
         </div>
       </form>
-    </div>
+    </Dialog>
   );
 }
 

@@ -68,12 +68,16 @@ export function prettyCategory(category) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+const TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
 export function formatTime(iso) {
   if (!iso) return "";
 
   const date = new Date(iso);
 
-  return Number.isNaN(date.getTime())
-    ? ""
-    : date.toLocaleTimeString([], { hour12: false });
+  return Number.isNaN(date.getTime()) ? "" : TIME_FORMAT.format(date);
 }

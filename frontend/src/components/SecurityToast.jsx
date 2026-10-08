@@ -1,6 +1,9 @@
 import { useEffect } from "react";
+import { ShieldX, TriangleAlert, X } from "lucide-react";
 
 import { formatTime, prettyCategory } from "../api";
+import Button from "./ui/Button";
+import { SeverityBadge } from "./ui/Badge";
 
 function SecurityToast({ alert, onClose, onView }) {
   useEffect(() => {
@@ -14,39 +17,37 @@ function SecurityToast({ alert, onClose, onView }) {
   if (!alert) return null;
 
   const event = alert.event;
-  const critical = alert.critical;
+  const Icon = event.jailbreak_success ? ShieldX : TriangleAlert;
 
   return (
-    <div
-      className={`security-toast ${critical ? "critical" : "high"}`}
-      role="alert"
-    >
+    <div className={`toast ${alert.critical ? "toast-crit" : "toast-warn"}`} role="alert">
       <div className="toast-head">
-        <span className="toast-icon">⚠</span>
-        <strong>SECURITY ALERT{alert.test ? " (test)" : ""}</strong>
-        <button className="toast-close" onClick={onClose} aria-label="Dismiss">
-          ×
+        <Icon size={18} aria-hidden="true" />
+        <strong>
+          {event.jailbreak_success ? "Successful jailbreak" : "Jailbreak attempt detected"}
+          {alert.test ? " (test)" : ""}
+        </strong>
+
+        <button
+          type="button"
+          className="btn btn-ghost btn-icon toast-close"
+          onClick={onClose}
+          aria-label="Dismiss alert"
+        >
+          <X size={16} aria-hidden="true" />
         </button>
       </div>
 
-      <div className="toast-body">
-        <div>
-          {event.jailbreak_success
-            ? "Successful jailbreak detected."
-            : "Potential jailbreak attempt detected."}
-        </div>
-
-        <div className="toast-meta">
-          <span>Severity: {event.severity}</span>
-          <span>Risk: {event.risk_score}</span>
-          <span>{prettyCategory(event.category)}</span>
-          <span>{formatTime(event.timestamp)}</span>
-        </div>
+      <div className="toast-meta">
+        <SeverityBadge level={event.severity} />
+        <span className="num">Risk {event.risk_score}/100</span>
+        <span>{prettyCategory(event.category)}</span>
+        <span className="num">{formatTime(event.timestamp)}</span>
       </div>
 
-      <button className="toast-action" onClick={onView}>
-        View Security Event
-      </button>
+      <Button variant="secondary" size="sm" onClick={onView}>
+        View security event
+      </Button>
     </div>
   );
 }

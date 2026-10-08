@@ -13,7 +13,8 @@ from app.intelligence.forensic import ForensicLogger
 from app.intelligence.kill_chain import KillChainTracker
 from app.intelligence.mitre import map_to_mitre_atlas
 
-from app.services.llm import generate_response
+from app.services.llm import generate_response, SYSTEM_PROMPT
+from app.security.monitor import get_monitor
 from app.database.influx import InfluxDBService
 
 from app.crew.runtime import DEEPDeceiverCrewRuntime
@@ -245,10 +246,31 @@ def chat(request: ChatRequest):
 
 
     # --------------------------------------------------
+    # 11b. Security monitoring (jailbreak detection, risk,
+    #      alerts). Never raises - chat must keep working.
+    # --------------------------------------------------
+
+    security = get_monitor().process_chat(
+        message=request.message,
+        response=response,
+        session_id=session_id,
+        routed_to_shadow=(environment == "shadow"),
+        fast_filter_result=filter_result,
+        stateful_result=stateful_result,
+        sentry_result=sentry_result,
+        analyst_result=analyst_result,
+        system_prompt=SYSTEM_PROMPT,
+    )
+
+
+    # --------------------------------------------------
     # 12. API Response
     # --------------------------------------------------
 
     return {
+
+        "security": security,
+
 
         "response": response,
 

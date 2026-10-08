@@ -9,3 +9,15 @@ npm run dev
 
 #To stop and remove the InfluxDB container, but preserve your forensic data because we are not using -v.
 docker compose -f docker\docker-compose.yml down
+
+#Backend (from the backend folder; Python 3.12 is required by crewai/giskard)
+py -3.12 -m venv proj
+proj\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+
+#Tests (from the backend folder)
+pytest tests
+
+#Optional: host alert bridge, only if the backend runs inside Docker
+python scripts\host_alert_listener.py

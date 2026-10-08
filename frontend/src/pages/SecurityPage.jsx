@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatTime, getJSON, postJSON, prettyCategory } from "../api";
 
@@ -9,11 +9,82 @@ const OUTCOME_LABEL = {
   ATTEMPT: "Attempt",
 };
 
-function Metric({ label, value, tone, hint }) {
+/** Animates a number from its previous value to the new one. */
+function CountUp({ value, suffix = "" }) {
+  const target = Number(value) || 0;
+  const [shown, setShown] = useState(0);
+  const from = useRef(0);
+
+  useEffect(() => {
+    const start = performance.now();
+    const origin = from.current;
+    let frame;
+
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / 700);
+      const eased = 1 - Math.pow(1 - t, 3);
+
+      setShown(origin + (target - origin) * eased);
+
+      if (t < 1) {
+        frame = requestAnimationFrame(tick);
+      } else {
+        from.current = target;
+      }
+    };
+
+    frame = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(frame);
+  }, [target]);
+
+  const digits = Number.isInteger(target) ? 0 : 1;
+
+  return (
+    <>
+      {shown.toFixed(digits)}
+      {suffix}
+    </>
+  );
+}
+
+function Metric({ label, value, tone, hint, suffix }) {
   return (
     <div className={`metric ${tone || ""}`} title={hint}>
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong>
+        <CountUp value={value} suffix={suffix} />
+      </strong>
+    </div>
+  );
+}
+
+function RiskRing({ value, level }) {
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - Math.min(100, value) / 100);
+
+  return (
+    <div className="risk-ring">
+      <svg viewBox="0 0 140 140" width="140" height="140">
+        <circle cx="70" cy="70" r={radius} className="ring-track" />
+        <circle
+          cx="70"
+          cy="70"
+          r={radius}
+          className={`ring-fill ring-${level}`}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          transform="rotate(-90 70 70)"
+        />
+      </svg>
+
+      <div className="ring-label">
+        <strong>
+          <CountUp value={value} />
+        </strong>
+        <span>avg risk</span>
+      </div>
     </div>
   );
 }
@@ -222,14 +293,58 @@ function SecurityPage({ refreshKey }) {
           <Metric label="Average Risk Score" value={stats.average_risk_score} />
           <Metric
             label="Model Robustness"
-            value={`${stats.model_robustness}%`}
+            value={stats.model_robustness}
+            suffix="%"
             hint="Blocked / (blocked + suspicious + successful)"
           />
           <Metric
             label="Jailbreak Success Rate"
-            value={`${stats.jailbreak_success_rate}%`}
+            value={stats.jailbreak_success_rate}
+            suffix="%"
           />
         </div>
+
+        <section className="panel overview">
+          <RiskRing
+            value={stats.average_risk_score}
+            level={
+              stats.average_risk_score > 80
+                ? "CRITICAL"
+                : stats.average_risk_score > 60
+                ? "HIGH"
+                : stats.average_risk_score > 40
+                ? "MEDIUM"
+                : "LOW"
+            }
+          />
+
+          <div className="category-bars">
+            <h2>Attack categories</h2>
+
+            {Object.keys(stats.by_category).length === 0 && (
+              <div className="empty-inline">No attacks recorded yet.</div>
+            )}
+
+            {Object.entries(stats.by_category)
+              .sort((a, b) => b[1] - a[1])
+              .map(([category, count]) => (
+                <div className="cat-row" key={category}>
+                  <span>{prettyCategory(category)}</span>
+
+                  <div className="cat-track">
+                    <div
+                      className="cat-fill"
+                      style={{
+                        width: `${(count / stats.total_attempts) * 100}%`,
+                      }}
+                    />
+                  </div>
+
+                  <b>{count}</b>
+                </div>
+              ))}
+          </div>
+        </section>
 
         <section className="panel">
           <div className="panel-head">

@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import Logo from "./components/Logo";
 
 import ChatPage from "./pages/ChatPage";
 import SOCPage from "./pages/SOCPage";
@@ -10,6 +12,7 @@ import useSecurityStream from "./hooks/useSecurityStream";
 
 import "./App.css";
 import "./ui.css";
+import "./theme.css";
 
 const NAV = [
   { id: "chat", label: "LLM Interface", icon: "💬" },
@@ -48,13 +51,31 @@ function App() {
     setPage("chat");
   };
 
+  // Ctrl/Cmd + K starts a new chat.
+  useEffect(() => {
+    const onKey = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setMessages([]);
+        setSessionId(crypto.randomUUID());
+        setPage("chat");
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className="shell">
+
+      <div className="aurora" aria-hidden="true" />
 
       <aside className="sidebar">
 
         <div className="brand">
-          <span className="brand-mark">✺</span>
+          <Logo size={34} className="brand-logo" />
 
           <div>
             <h1>DEEP-DECEIVER</h1>
@@ -63,7 +84,7 @@ function App() {
         </div>
 
         <button className="new-chat" onClick={newChat}>
-          ＋ New chat
+          ＋ New chat <kbd>Ctrl K</kbd>
         </button>
 
         <nav className="side-nav">

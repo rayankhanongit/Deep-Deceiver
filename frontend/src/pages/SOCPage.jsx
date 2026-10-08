@@ -51,7 +51,9 @@ function SOCPage() {
   };
 
   useEffect(() => {
-    fetchSOCData();
+    const first = setTimeout(fetchSOCData, 0);
+
+    return () => clearTimeout(first);
   }, []);
 
   if (loading) {

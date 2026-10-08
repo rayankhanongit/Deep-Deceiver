@@ -1,26 +1,41 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Check,
+  LayoutDashboard,
+  Lock,
+  Menu,
+  MessageSquare,
+  Plus,
+  Radar,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import Logo from "./components/Logo";
-
 import ChatPage from "./pages/ChatPage";
-import SOCPage from "./pages/SOCPage";
-import SecurityPage from "./pages/SecurityPage";
-
 import OperatorUnlock from "./components/OperatorUnlock";
-import RedTeamPanel from "./components/RedTeamPanel";
 import SecurityToast from "./components/SecurityToast";
+import Button from "./components/ui/Button";
 import useSecurityStream from "./hooks/useSecurityStream";
 import { getJSON, getOperatorToken, setOperatorToken } from "./api";
 
-import "./App.css";
-import "./ui.css";
-import "./theme.css";
-import "./conversations.css";
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/ui.css";
+import "./styles/app.css";
+import "./styles/polish.css";
+
+// Operator-only screens are code-split: ordinary visitors never download them.
+const SecurityPage = lazy(() => import("./pages/SecurityPage"));
+const SOCPage = lazy(() => import("./pages/SOCPage"));
+const RedTeamPanel = lazy(() => import("./components/RedTeamPanel"));
 
 const OPERATOR_NAV = [
-  { id: "chat", label: "LLM Interface", icon: "💬" },
-  { id: "security", label: "Security Monitor", icon: "🛡" },
-  { id: "soc", label: "SOC Dashboard", icon: "📊" },
+  { id: "chat", label: "Assistant", Icon: MessageSquare },
+  { id: "security", label: "Security Monitor", Icon: Radar },
+  { id: "soc", label: "SOC Dashboard", Icon: LayoutDashboard },
 ];
 
 const STORE_KEY = "dd_conversations_v1";
@@ -77,6 +92,18 @@ function groupLabel(timestamp) {
 function App() {
 
   const [page, setPage] = useState("chat");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Destructive actions need a second click (auto-cancels after 4 s).
+  const [confirmId, setConfirmId] = useState(null);
+
+  useEffect(() => {
+    if (!confirmId) return undefined;
+
+    const timer = setTimeout(() => setConfirmId(null), 4000);
+
+    return () => clearTimeout(timer);
+  }, [confirmId]);
 
   // Conversations live at App level and are saved in this browser, so
   // they survive page switches and reloads. Each conversation id doubles as
@@ -166,14 +193,18 @@ function App() {
     }
 
     setPage("chat");
+    setDrawerOpen(false);
   }, [conversations]);
 
   const openConversation = (id) => {
     setActiveId(id);
     setPage("chat");
+    setDrawerOpen(false);
   };
 
   const deleteConversation = (id) => {
+    setConfirmId(null);
+
     const rest = conversations.filter((c) => c.id !== id);
     const list = rest.length ? rest : [newConversation()];
 
@@ -205,7 +236,7 @@ function App() {
   }, [conversations, activeId]);
 
   // Ctrl/Cmd + K: new chat.  Ctrl/Cmd + Shift + O: operator unlock/lock
-  // (intentionally has no visible button).
+  // (intentionally has no visible button).  Escape closes the drawer.
   useEffect(() => {
     const onKey = (event) => {
       const mod = event.ctrlKey || event.metaKey;
@@ -222,6 +253,8 @@ function App() {
       } else if (mod && key === "k") {
         event.preventDefault();
         newChat();
+      } else if (event.key === "Escape") {
+        setDrawerOpen(false);
       }
     };
 
@@ -230,97 +263,154 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [operator, lock, newChat]);
 
+  const closeRedTeam = useCallback(() => {
+    setRedTeamOpen(false);
+    setRefreshKey((key) => key + 1);
+  }, []);
+
   return (
     <div className="shell">
 
-      <div className="aurora" aria-hidden="true" />
+      <a className="skip-link" href="#main">Skip to content</a>
 
-      <aside className="sidebar">
+      <header className="topbar">
+        <Button
+          variant="ghost"
+          size="icon"
+          icon={Menu}
+          label="Open navigation"
+          aria-expanded={drawerOpen}
+          aria-controls="sidebar"
+          onClick={() => setDrawerOpen(true)}
+        />
+
+        <div className="topbar-brand">
+          <Logo size={24} />
+          <span translate="no">DEEP-DECEIVER</span>
+        </div>
+      </header>
+
+      {drawerOpen && (
+        <button
+          type="button"
+          className="scrim"
+          onClick={() => setDrawerOpen(false)}
+          aria-label="Close navigation"
+          tabIndex={-1}
+        />
+      )}
+
+      <aside
+        id="sidebar"
+        className={drawerOpen ? "sidebar open" : "sidebar"}
+        aria-label="Navigation"
+      >
 
         <div className="brand">
-          <Logo size={34} className="brand-logo" />
+          <Logo size={30} />
 
           <div>
-            <h1>DEEP-DECEIVER</h1>
-            <p>{operator ? "Operator view" : "Assistant"}</p>
+            <strong translate="no">DEEP-DECEIVER</strong>
+            <span>{operator ? "Operator view" : "Assistant"}</span>
           </div>
+
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon drawer-close"
+            onClick={() => setDrawerOpen(false)}
+            aria-label="Close navigation"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
         </div>
 
-        <button className="new-chat" onClick={newChat}>
-          ＋ New chat <kbd>Ctrl K</kbd>
-        </button>
+        <Button variant="secondary" icon={Plus} className="new-chat" onClick={newChat}>
+          New chat <kbd>Ctrl&nbsp;K</kbd>
+        </Button>
 
         {operator && (
-          <nav className="side-nav">
-            {OPERATOR_NAV.map((item) => (
+          <nav className="side-nav" aria-label="Sections">
+            {OPERATOR_NAV.map(({ id, label, Icon }) => (
               <button
-                key={item.id}
-                className={page === item.id ? "side-link active" : "side-link"}
-                onClick={() => setPage(item.id)}
+                key={id}
+                type="button"
+                className={page === id ? "side-link active" : "side-link"}
+                aria-current={page === id ? "page" : undefined}
+                onClick={() => {
+                  setPage(id);
+                  setDrawerOpen(false);
+                }}
               >
-                <span>{item.icon}</span>
-                {item.label}
+                <Icon size={17} aria-hidden="true" />
+                {label}
               </button>
             ))}
           </nav>
         )}
 
-        <div className="chat-list">
+        <nav className="chat-list" aria-label="Chats">
           {grouped.map((group) => (
             <div key={group.label}>
-              <div className="chat-group">{group.label}</div>
+              <h2 className="chat-group">{group.label}</h2>
 
-              {group.items.map((c) => (
-                <div
-                  key={c.id}
-                  className={
-                    c.id === activeId && page === "chat"
-                      ? "chat-item active"
-                      : "chat-item"
-                  }
-                >
-                  <button
-                    className="chat-item-title"
-                    onClick={() => openConversation(c.id)}
-                    title={c.title}
-                  >
-                    {c.title}
-                  </button>
+              {group.items.map((c) => {
+                const current = c.id === activeId && page === "chat";
 
-                  <button
-                    className="chat-item-delete"
-                    onClick={() => deleteConversation(c.id)}
-                    aria-label="Delete chat"
-                    title="Delete chat"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+                return (
+                  <div key={c.id} className={current ? "chat-item active" : "chat-item"}>
+                    <button
+                      type="button"
+                      className="chat-item-title"
+                      aria-current={current ? "page" : undefined}
+                      onClick={() => openConversation(c.id)}
+                      title={c.title}
+                    >
+                      {c.title}
+                    </button>
+
+                    {confirmId === c.id ? (
+                      <button
+                        type="button"
+                        className="chat-item-delete confirm"
+                        onClick={() => deleteConversation(c.id)}
+                        aria-label={`Confirm delete chat: ${c.title}`}
+                      >
+                        <Check size={14} aria-hidden="true" /> Delete?
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="chat-item-delete"
+                        onClick={() => setConfirmId(c.id)}
+                        aria-label={`Delete chat: ${c.title}`}
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
-        </div>
+        </nav>
 
         {operator && (
           <div className="sidebar-foot">
-            <div className="status">
-              <span
-                className={connected ? "status-dot" : "status-dot offline"}
-              ></span>
-
-              {connected ? "Live alerts connected" : "Connecting…"}
+            <div className="live" role="status">
+              <span className={connected ? "live-dot on" : "live-dot"} aria-hidden="true" />
+              {connected ? "Live alerts connected" : "Connecting to alerts…"}
             </div>
 
-            <button className="lock-button" onClick={lock}>
-              🔒 Lock operator view
-            </button>
+            <Button variant="ghost" size="sm" icon={Lock} onClick={lock}>
+              Lock operator view
+            </Button>
           </div>
         )}
 
       </aside>
 
 
-      <div className="main">
+      <main id="main" className="main" tabIndex="-1">
 
         {page === "chat" && (
           <ChatPage
@@ -333,17 +423,19 @@ function App() {
           />
         )}
 
-        {operator && page === "security" && (
-          <SecurityPage refreshKey={refreshKey} />
-        )}
+        <Suspense fallback={<div className="page-loading" role="status">Loading…</div>}>
+          {operator && page === "security" && (
+            <SecurityPage refreshKey={refreshKey} />
+          )}
 
-        {operator && page === "soc" && (
-          <div className="page">
-            <SOCPage />
-          </div>
-        )}
+          {operator && page === "soc" && (
+            <div className="page">
+              <SOCPage />
+            </div>
+          )}
+        </Suspense>
 
-      </div>
+      </main>
 
 
       {unlockOpen && (
@@ -357,14 +449,9 @@ function App() {
         />
       )}
 
-      {operator && redTeamOpen && (
-        <RedTeamPanel
-          onClose={() => {
-            setRedTeamOpen(false);
-            setRefreshKey((key) => key + 1);
-          }}
-        />
-      )}
+      <Suspense fallback={null}>
+        {operator && redTeamOpen && <RedTeamPanel onClose={closeRedTeam} />}
+      </Suspense>
 
       {operator && (
         <SecurityToast

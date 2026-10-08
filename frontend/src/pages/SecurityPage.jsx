@@ -1,119 +1,75 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useState } from "react";
+import {
+  BellRing,
+  ChevronRight,
+  CircleAlert,
+  Ghost,
+  RefreshCw,
+  ShieldCheck,
+  ShieldX,
+  Target,
+} from "lucide-react";
 
 import { formatTime, getJSON, postJSON, prettyCategory } from "../api";
+import Button from "../components/ui/Button";
+import { Badge, SeverityBadge, StatusBadge } from "../components/ui/Badge";
+import { Card, EmptyState, MetricCard, RiskMeter, Spinner } from "../components/ui/Display";
+import { stateFor } from "../components/ui/status";
 
-const OUTCOME_LABEL = {
-  BLOCKED: "Attack blocked",
-  SUCCESS: "Jailbreak success",
-  SUSPICIOUS: "Suspicious",
-  ATTEMPT: "Attempt",
-};
+const CubeWave = lazy(() => import("../components/CubeWave"));
 
-/** Animates a number from its previous value to the new one. */
-function CountUp({ value, suffix = "" }) {
-  const target = Number(value) || 0;
-  const [shown, setShown] = useState(0);
-  const from = useRef(0);
-
-  useEffect(() => {
-    const start = performance.now();
-    const origin = from.current;
-    let frame;
-
-    const tick = (now) => {
-      const t = Math.min(1, (now - start) / 700);
-      const eased = 1 - Math.pow(1 - t, 3);
-
-      setShown(origin + (target - origin) * eased);
-
-      if (t < 1) {
-        frame = requestAnimationFrame(tick);
-      } else {
-        from.current = target;
-      }
-    };
-
-    frame = requestAnimationFrame(tick);
-
-    return () => cancelAnimationFrame(frame);
-  }, [target]);
-
-  const digits = Number.isInteger(target) ? 0 : 1;
-
-  return (
-    <>
-      {shown.toFixed(digits)}
-      {suffix}
-    </>
-  );
-}
-
-function Metric({ label, value, tone, hint, suffix }) {
-  return (
-    <div className={`metric ${tone || ""}`} title={hint}>
-      <span>{label}</span>
-      <strong>
-        <CountUp value={value} suffix={suffix} />
-      </strong>
-    </div>
-  );
-}
-
-function RiskRing({ value, level }) {
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - Math.min(100, value) / 100);
-
-  return (
-    <div className="risk-ring">
-      <svg viewBox="0 0 140 140" width="140" height="140">
-        <circle cx="70" cy="70" r={radius} className="ring-track" />
-        <circle
-          cx="70"
-          cy="70"
-          r={radius}
-          className={`ring-fill ring-${level}`}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          transform="rotate(-90 70 70)"
-        />
-      </svg>
-
-      <div className="ring-label">
-        <strong>
-          <CountUp value={value} />
-        </strong>
-        <span>avg risk</span>
-      </div>
-    </div>
-  );
+function levelFor(score) {
+  if (score > 80) return "CRITICAL";
+  if (score > 60) return "HIGH";
+  if (score > 40) return "MEDIUM";
+  if (score > 20) return "LOW";
+  return "SAFE";
 }
 
 function EventRow({ event }) {
   const [open, setOpen] = useState(false);
+  const bodyId = useId();
+
+  const state = stateFor({
+    outcome: event.outcome,
+    severity: event.severity,
+    jailbreakSuccess: event.jailbreak_success,
+  });
 
   return (
-    <div className={`sec-event sev-border-${event.severity}`}>
-      <button className="sec-event-head" onClick={() => setOpen(!open)}>
-        <span className={`badge sev-${event.severity}`}>{event.severity}</span>
+    <li className={`event event-${state}`}>
+      <h3>
+        <button
+          type="button"
+          className="event-head"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen(!open)}
+        >
+          <ChevronRight size={16} className="chev" aria-hidden="true" />
 
-        <span className="sec-event-summary">{event.summary}</span>
+          <span className="event-main">
+            <span className="event-summary">{event.summary}</span>
+            <span className="event-sub">
+              {prettyCategory(event.category)} ·{" "}
+              {event.source === "red_team" ? "Red Team" : "Chat"}
+            </span>
+          </span>
 
-        <span className={`outcome outcome-${event.outcome}`}>
-          {OUTCOME_LABEL[event.outcome] || event.outcome}
-        </span>
-
-        <span className="sec-event-risk">{event.risk_score}</span>
-
-        <span className="sec-event-time">{formatTime(event.timestamp)}</span>
-      </button>
+          <StatusBadge state={state} />
+          <SeverityBadge level={event.severity} />
+          <span className="num event-risk" aria-label={`Risk ${event.risk_score}`}>
+            {event.risk_score}
+          </span>
+          <time className="num event-time" dateTime={event.timestamp}>
+            {formatTime(event.timestamp)}
+          </time>
+        </button>
+      </h3>
 
       {open && (
-        <div className="sec-event-body">
-          <dl>
-            <dt>Category</dt>
-            <dd>{prettyCategory(event.category)}</dd>
-
+        <div id={bodyId} className="event-body">
+          <dl className="kv">
             <dt>Source</dt>
             <dd>
               {event.source === "red_team"
@@ -122,26 +78,22 @@ function EventRow({ event }) {
             </dd>
 
             <dt>Confidence</dt>
-            <dd>{Math.round(event.confidence * 100)}%</dd>
+            <dd className="num">{Math.round(event.confidence * 100)}%</dd>
 
             <dt>Model resisted</dt>
             <dd>
-              {event.model_resisted === null
-                ? "unknown"
-                : event.model_resisted
-                ? "yes"
-                : "no"}
+              {event.model_resisted === null ? "Unknown" : event.model_resisted ? "Yes" : "No"}
             </dd>
 
             {event.details?.contained && (
               <>
                 <dt>Honeypot</dt>
-                <dd>Attacker was served decoy data (they are not told)</dd>
+                <dd>Attacker was served decoy data and was not told.</dd>
               </>
             )}
 
             <dt>Host alert</dt>
-            <dd>{event.alert_triggered ? "sent" : "not triggered"}</dd>
+            <dd>{event.alert_triggered ? "Sent" : "Not triggered"}</dd>
 
             {event.details?.reason && (
               <>
@@ -153,14 +105,14 @@ function EventRow({ event }) {
             {event.details?.prompt_excerpt && (
               <>
                 <dt>Prompt (redacted)</dt>
-                <dd className="rt-quote">{event.details.prompt_excerpt}</dd>
+                <dd className="quote">{event.details.prompt_excerpt}</dd>
               </>
             )}
 
             {event.details?.response_excerpt && (
               <>
                 <dt>Response (redacted)</dt>
-                <dd className="rt-quote">{event.details.response_excerpt}</dd>
+                <dd className="quote">{event.details.response_excerpt}</dd>
               </>
             )}
 
@@ -169,9 +121,17 @@ function EventRow({ event }) {
           </dl>
         </div>
       )}
-    </div>
+    </li>
   );
 }
+
+const FILTERS = [
+  { id: "ALL", label: "All" },
+  { id: "MEDIUM", label: "Medium+" },
+  { id: "HIGH", label: "High+" },
+  { id: "CRITICAL", label: "Critical" },
+  { id: "HONEYPOT", label: "Honeypot" },
+];
 
 function SecurityPage({ refreshKey }) {
   const [stats, setStats] = useState(null);
@@ -179,6 +139,7 @@ function SecurityPage({ refreshKey }) {
   const [filter, setFilter] = useState("ALL");
   const [error, setError] = useState("");
   const [testing, setTesting] = useState(false);
+  const [testSent, setTestSent] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -216,9 +177,11 @@ function SecurityPage({ refreshKey }) {
 
   const sendTest = async () => {
     setTesting(true);
+    setTestSent(false);
 
     try {
       await postJSON("/security/alerts/test");
+      setTestSent(true);
     } catch {
       setError("Test alert failed.");
     } finally {
@@ -228,180 +191,208 @@ function SecurityPage({ refreshKey }) {
 
   if (!stats) {
     return (
-      <main className="page">
+      <div className="page">
         <div className="page-inner">
-          <div className="soc-loading">
-            {error || "Loading security monitor…"}
-          </div>
+          {error ? (
+            <div className="form-error" role="alert">
+              <CircleAlert size={16} aria-hidden="true" />
+              {error}
+            </div>
+          ) : (
+            <div className="empty" role="status">
+              <Spinner label="Loading security monitor" />
+              <p>Loading security monitor…</p>
+            </div>
+          )}
         </div>
-      </main>
+      </div>
     );
   }
 
-  const threat = stats.current_threat_level;
+  const avg = stats.average_risk_score;
+  const level = levelFor(avg);
+  const attacked = stats.system_status !== "PROTECTED";
 
   return (
-    <main className="page">
+    <div className="page">
       <div className="page-inner">
-        <div className="page-head">
-          <div>
+
+        {/* ---------- hero band ---------- */}
+
+        <header className="sec-hero">
+          <Suspense fallback={null}>
+            <CubeWave className="sec-cubes" />
+          </Suspense>
+
+          <div className="sec-hero-copy">
             <h1>Security Monitor</h1>
-            <p>Jailbreak detection, risk scoring and Red Team results.</p>
+            <p>Jailbreak detection, risk scoring and Red Team results in one place.</p>
+
+            <div className="sec-hero-status">
+              {attacked ? (
+                <StatusBadge state="critical" label="Under attack" />
+              ) : (
+                <StatusBadge state="safe" label="Protected" />
+              )}
+
+              <span className="threat-level">
+                Threat level (15 min) <SeverityBadge level={stats.current_threat_level} />
+              </span>
+            </div>
           </div>
 
-          <div className="page-head-actions">
-            <button className="btn-secondary" onClick={sendTest} disabled={testing}>
+          <div className="sec-hero-actions">
+            <Button variant="secondary" icon={BellRing} onClick={sendTest} disabled={testing}>
               Send test host alert
-            </button>
+            </Button>
 
-            <button className="btn-secondary" onClick={load}>
+            <Button variant="ghost" icon={RefreshCw} onClick={load}>
               Refresh
-            </button>
+            </Button>
+
+            <span className="sr-only" role="status">
+              {testSent ? "Test alert sent" : ""}
+            </span>
+          </div>
+        </header>
+
+        {error && (
+          <div className="form-error" role="alert">
+            <CircleAlert size={16} aria-hidden="true" />
+            {error}
+          </div>
+        )}
+
+        {/* ---------- overview: meter + key numbers ---------- */}
+
+        <div className="overview">
+          <Card className="overview-risk">
+            <RiskMeter value={avg} level={level} />
+
+            <div>
+              <h2>Average risk</h2>
+              <p>
+                Across <span className="num">{stats.total_attempts}</span> recorded attempts.
+                Model robustness is <strong className="num">{stats.model_robustness}%</strong>.
+              </p>
+            </div>
+          </Card>
+
+          <div className="overview-key">
+            <MetricCard
+              icon={Target}
+              label="Total attempts"
+              value={stats.total_attempts}
+              hint="All detected attack attempts, chat and Red Team"
+            />
+            <MetricCard
+              icon={ShieldCheck}
+              label="Blocked attempts"
+              value={stats.blocked_attempts}
+              tone="ok"
+            />
+            <MetricCard
+              icon={ShieldX}
+              label="Successful jailbreaks"
+              value={stats.successful_jailbreaks}
+              tone={stats.successful_jailbreaks ? "crit" : ""}
+              hint="Attempts where the model violated a boundary"
+            />
           </div>
         </div>
 
-        {error && <div className="form-error">{error}</div>}
-
-        <div className="status-banner">
-          <div>
-            <span className="status-label">System status</span>
-
-            <strong
-              className={
-                stats.system_status === "PROTECTED" ? "status-ok" : "status-bad"
-              }
-            >
-              ● {stats.system_status}
-            </strong>
-          </div>
-
-          <div>
-            <span className="status-label">Current threat level (15 min)</span>
-            <strong className={`sev-text-${threat}`}>{threat}</strong>
-          </div>
-        </div>
-
-        <div className="metrics">
-          <Metric
-            label="Total Attempts"
-            value={stats.total_attempts}
-            hint="All detected attack attempts, chat and Red Team"
-          />
-          <Metric
-            label="Blocked Attempts"
-            value={stats.blocked_attempts}
-            tone="good"
-          />
-          <Metric
-            label="Successful Jailbreaks"
-            value={stats.successful_jailbreaks}
-            tone={stats.successful_jailbreaks ? "bad" : ""}
-          />
-          <Metric
-            label="Honeypot Interactions"
+        <div className="overview-secondary">
+          <MetricCard
+            icon={Ghost}
+            label="Honeypot interactions"
             value={stats.honeypot_interactions}
             tone={stats.honeypot_interactions ? "warn" : ""}
             hint="Messages from contained sessions that received decoy data"
           />
-          <Metric label="Contained Sessions" value={stats.honeypot_sessions} />
-          <Metric label="High Risk Events" value={stats.high_risk_events} />
-          <Metric
-            label="Critical Events"
+          <MetricCard label="Contained sessions" value={stats.honeypot_sessions} />
+          <MetricCard label="High-risk events" value={stats.high_risk_events} />
+          <MetricCard
+            label="Critical events"
             value={stats.critical_events}
-            tone={stats.critical_events ? "bad" : ""}
+            tone={stats.critical_events ? "crit" : ""}
           />
-          <Metric label="Average Risk Score" value={stats.average_risk_score} />
-          <Metric
-            label="Model Robustness"
-            value={stats.model_robustness}
-            suffix="%"
-            hint="Blocked / (blocked + suspicious + successful)"
-          />
-          <Metric
-            label="Jailbreak Success Rate"
+          <MetricCard
+            label="Jailbreak success rate"
             value={stats.jailbreak_success_rate}
             suffix="%"
           />
         </div>
 
-        <section className="panel overview">
-          <RiskRing
-            value={stats.average_risk_score}
-            level={
-              stats.average_risk_score > 80
-                ? "CRITICAL"
-                : stats.average_risk_score > 60
-                ? "HIGH"
-                : stats.average_risk_score > 40
-                ? "MEDIUM"
-                : "LOW"
-            }
-          />
+        {/* ---------- categories ---------- */}
 
-          <div className="category-bars">
-            <h2>Attack categories</h2>
+        <Card className="panel">
+          <h2 className="panel-title">Attack categories</h2>
 
-            {Object.keys(stats.by_category).length === 0 && (
-              <div className="empty-inline">No attacks recorded yet.</div>
-            )}
+          {Object.keys(stats.by_category).length === 0 ? (
+            <p className="muted">No attacks recorded yet.</p>
+          ) : (
+            <ul className="cat-bars">
+              {Object.entries(stats.by_category)
+                .sort((a, b) => b[1] - a[1])
+                .map(([category, count]) => (
+                  <li key={category}>
+                    <span>{prettyCategory(category)}</span>
 
-            {Object.entries(stats.by_category)
-              .sort((a, b) => b[1] - a[1])
-              .map(([category, count]) => (
-                <div className="cat-row" key={category}>
-                  <span>{prettyCategory(category)}</span>
+                    <div className="cat-track" aria-hidden="true">
+                      <div
+                        className="cat-fill"
+                        style={{ transform: `scaleX(${count / stats.total_attempts})` }}
+                      />
+                    </div>
 
-                  <div className="cat-track">
-                    <div
-                      className="cat-fill"
-                      style={{
-                        width: `${(count / stats.total_attempts) * 100}%`,
-                      }}
-                    />
-                  </div>
+                    <b className="num">{count}</b>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </Card>
 
-                  <b>{count}</b>
-                </div>
-              ))}
-          </div>
-        </section>
+        {/* ---------- events ---------- */}
 
-        <section className="panel">
+        <Card className="panel">
           <div className="panel-head">
-            <h2>Recent Security Events</h2>
+            <h2 className="panel-title">Recent security events</h2>
 
-            <div className="filters">
-              {["ALL", "MEDIUM", "HIGH", "CRITICAL", "HONEYPOT"].map((level) => (
+            <div className="filters" role="group" aria-label="Filter events">
+              {FILTERS.map(({ id, label }) => (
                 <button
-                  key={level}
-                  className={filter === level ? "chip active" : "chip"}
-                  onClick={() => setFilter(level)}
+                  key={id}
+                  type="button"
+                  className={filter === id ? "chip active" : "chip"}
+                  aria-pressed={filter === id}
+                  onClick={() => setFilter(id)}
                 >
-                  {level === "ALL"
-                    ? "All"
-                    : level === "HONEYPOT"
-                    ? "🍯 Honeypot"
-                    : `${level}+`}
+                  {label}
                 </button>
               ))}
             </div>
           </div>
 
           {events.length === 0 ? (
-            <div className="empty-state">
-              No security events yet. Send a jailbreak attempt in the chat or
-              run a Red Team assessment.
-            </div>
+            <EmptyState icon={ShieldCheck} title="No events here yet">
+              Send a jailbreak attempt in the chat or run a Red Team assessment to see
+              events appear.
+            </EmptyState>
           ) : (
-            <div className="sec-events">
+            <ul className="events">
               {events.map((event) => (
                 <EventRow key={event.event_id} event={event} />
               ))}
-            </div>
+            </ul>
           )}
-        </section>
+        </Card>
+
+        <p className="foot-badge">
+          <Badge tone="accent">Live</Badge> Refreshes every 5 seconds.
+        </p>
+
       </div>
-    </main>
+    </div>
   );
 }
 

@@ -1,11 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.database.influx import InfluxDBService
+from app.security.operator import require_operator
 
 
 router = APIRouter(
     prefix="/soc",
-    tags=["SOC"]
+    tags=["SOC"],
+    dependencies=[Depends(require_operator)],
 )
 
 influxdb = InfluxDBService()

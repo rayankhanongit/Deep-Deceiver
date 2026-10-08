@@ -567,3 +567,46 @@ kbd {
     display: none;
   }
 }
+
+/* operator unlock + lock */
+
+.unlock-modal {
+  width: min(420px, 100%);
+}
+
+.token-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  background: rgba(4, 8, 18, 0.7);
+  color: var(--text);
+  font: inherit;
+}
+
+.token-input:focus {
+  border-color: var(--accent);
+}
+
+.lock-button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lock-button:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.metric.warn strong {
+  color: var(--warn);
+}

@@ -32,6 +32,25 @@ mocks and need neither Groq nor InfluxDB).
 
 ---
 
+## Stealth honeypot and operator view
+
+When the defence decides a session is hostile, the attacker is **not told**.
+Their chat looks exactly like a normal assistant: no alerts, badges or
+"protected environment" text. Behind the scenes the session is moved to the
+shadow environment and the persona "Atlas" keeps the conversation going with
+realistic, entirely fictional data (`backend/app/deception/dataset.py`),
+consistent for the whole session. Replies are never refusals, and harmful
+requests (malware, weapons ...) are deflected in character.
+
+* `POST /chat` returns **only** `{response, session}` to ordinary clients.
+* Everything else (detection details, events, alerts, Red Team, SOC) needs the
+  `OPERATOR_TOKEN` from `.env`, sent as `X-Operator-Token`.
+* In the browser press **Ctrl+Shift+O** (no visible button), paste the token,
+  and the Security Monitor, SOC dashboard, Red Team button and live alerts
+  appear. Ctrl+Shift+O again (or *Lock operator view*) hides them.
+* The operator follows the attacker live in *Security Monitor → 🍯 Honeypot*,
+  and gets a host desktop notification for high-risk events.
+
 # Adaptive Red Team Agent
 
 ## What it does

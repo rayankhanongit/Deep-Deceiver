@@ -1,20 +1,24 @@
 import { useEffect, useState } from "react";
 
-import { API } from "../api";
+import { API, getOperatorToken } from "../api";
 
 /**
  * Subscribes to the backend's Server-Sent Events stream and exposes the
  * most recent HIGH / CRITICAL alert. EventSource reconnects automatically.
  */
-export default function useSecurityStream() {
+export default function useSecurityStream(enabled) {
   const [alert, setAlert] = useState(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
+    if (!enabled) return undefined;
+
     let source;
 
     try {
-      source = new EventSource(`${API}/security/stream`);
+      source = new EventSource(
+        `${API}/security/stream?token=${encodeURIComponent(getOperatorToken())}`
+      );
     } catch {
       return undefined;
     }
@@ -35,7 +39,7 @@ export default function useSecurityStream() {
     };
 
     return () => source.close();
-  }, []);
+  }, [enabled]);
 
   return { alert, connected, clearAlert: () => setAlert(null) };
 }

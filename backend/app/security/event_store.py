@@ -179,7 +179,11 @@ class SecurityEventStore:
         if recent_levels:
             threat_level = max(recent_levels, key=severity_rank)
 
+        contained = [e for e in attacks if e.get("details", {}).get("contained")]
+
         return {
+            "honeypot_interactions": len(contained),
+            "honeypot_sessions": len({e.get("session_id") for e in contained}),
             "total_attempts": total_attempts,
             "blocked_attempts": len(blocked),
             "suspicious_attempts": len(suspicious),

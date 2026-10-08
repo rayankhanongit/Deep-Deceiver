@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from "react";
 
+import { authHeaders } from "../api";
 import ThreatSummary from "../components/ThreatSummary";
 import AttackTable from "../components/AttackTable";
 
@@ -20,8 +21,8 @@ function SOCPage() {
       setError("");
 
       const [statsResponse, eventsResponse] = await Promise.all([
-        fetch("http://127.0.0.1:8000/soc/stats"),
-        fetch("http://127.0.0.1:8000/soc/events")
+        fetch("http://127.0.0.1:8000/soc/stats", { headers: authHeaders() }),
+        fetch("http://127.0.0.1:8000/soc/events", { headers: authHeaders() })
       ]);
 
       if (!statsResponse.ok || !eventsResponse.ok) {

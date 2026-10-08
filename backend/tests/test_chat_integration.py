@@ -6,7 +6,7 @@ from app.crew.runtime import DEEPDeceiverCrewRuntime
 from app.detection.fast_filter import fast_filter
 
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Operator-Token": "pytest-operator-token"})
 
 active_runtime = None
 

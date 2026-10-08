@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Operator-Token": "pytest-operator-token"})
 
 
 def test_benign_request_creates_forensic_event():

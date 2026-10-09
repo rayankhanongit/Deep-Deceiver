@@ -97,19 +97,53 @@ function App() {
 
   const [page, setPage] = useState("chat");
 
-  // Background animation can be paused (it autoplays for longer than 5 s).
+  // Background animation. It autoplays for longer than 5 s, so it can be
+  // paused. The choice lasts for this browser session only (a remembered
+  // "paused" state looked like a frozen page on the next visit), and when the
+  // operating system asks for reduced motion the animation starts off but can
+  // be switched on with one click.
+  const [systemReduced, setSystemReduced] = useState(
+    () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
+  );
+  const [motionOverride, setMotionOverride] = useState(false);
   const [motionPaused, setMotionPaused] = useState(() => {
     try {
-      return localStorage.getItem(MOTION_KEY) === "1";
+      localStorage.removeItem(MOTION_KEY); // old persistent setting
+      return sessionStorage.getItem(MOTION_KEY) === "1";
     } catch {
       return false;
     }
   });
 
+  useEffect(() => {
+    const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    const onChange = (event) => setSystemReduced(event.matches);
+
+    media?.addEventListener?.("change", onChange);
+
+    return () => media?.removeEventListener?.("change", onChange);
+  }, []);
+
+  const motionBlockedBySystem = systemReduced && !motionOverride;
+  const motionOff = motionPaused || motionBlockedBySystem;
+
   const toggleMotion = () => {
+    if (motionBlockedBySystem) {
+      setMotionOverride(true);
+      setMotionPaused(false);
+
+      try {
+        sessionStorage.setItem(MOTION_KEY, "0");
+      } catch {
+        /* storage unavailable */
+      }
+
+      return;
+    }
+
     setMotionPaused((paused) => {
       try {
-        localStorage.setItem(MOTION_KEY, paused ? "0" : "1");
+        sessionStorage.setItem(MOTION_KEY, paused ? "0" : "1");
       } catch {
         /* storage unavailable */
       }
@@ -117,6 +151,10 @@ function App() {
       return !paused;
     });
   };
+
+  const motionLabel = motionBlockedBySystem
+    ? "Animation is off (system setting). Play"
+    : "Animation paused. Play";
 
   // ---- auto-hiding navigation -------------------------------------------
   // `open` is what the sidebar shows. It opens when the pointer reaches the
@@ -359,7 +397,7 @@ function App() {
       {/* ---------- stage ---------- */}
 
       <Suspense fallback={<div className="stage" data-mode={stageMode} aria-hidden="true" />}>
-        <CubeWave mode={stageMode} paused={motionPaused} />
+        <CubeWave mode={stageMode} paused={motionPaused} allowReduced={motionOverride} />
       </Suspense>
 
       {/* ---------- top bar ---------- */}
@@ -392,13 +430,14 @@ function App() {
 
           <button
             type="button"
-            className="nav-toggle"
+            className={motionOff ? "nav-toggle motion-toggle with-label" : "nav-toggle motion-toggle"}
             onClick={toggleMotion}
-            aria-pressed={motionPaused}
-            aria-label={motionPaused ? "Resume background animation" : "Pause background animation"}
-            title={motionPaused ? "Resume background animation" : "Pause background animation"}
+            aria-pressed={motionOff}
+            aria-label={motionOff ? "Play background animation" : "Pause background animation"}
+            title={motionOff ? "Play background animation" : "Pause background animation"}
           >
-            {motionPaused ? <Play size={20} aria-hidden="true" /> : <Pause size={20} aria-hidden="true" />}
+            {motionOff ? <Play size={20} aria-hidden="true" /> : <Pause size={20} aria-hidden="true" />}
+            {motionOff && <span>{motionLabel}</span>}
           </button>
         </div>
       </header>

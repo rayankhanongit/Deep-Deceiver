@@ -254,16 +254,19 @@ function hasWebGL() {
   }
 }
 
-function CubeWave({ mode = "home", paused = false }) {
+function CubeWave({ mode = "home", paused = false, allowReduced = false }) {
   const wrapper = useRef(null);
   const time = useRef(3.1);
   const pointer = useRef({ x: 0, y: 0, active: false, speed: 0, lastX: 0, lastY: 0 });
 
   const [supported] = useState(hasWebGL);
   const [tabActive, setTabActive] = useState(!document.hidden);
-  const [reduced, setReduced] = useState(
+  const [systemReduced, setReduced] = useState(
     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
   );
+
+  // A visitor's explicit "play" overrides the system reduced-motion default.
+  const reduced = systemReduced && !allowReduced;
 
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");

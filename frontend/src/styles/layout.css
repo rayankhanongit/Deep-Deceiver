@@ -1935,3 +1935,31 @@ textarea {
 .attack-table td .btn {
   min-height: 40px;
 }
+
+/* animation toggle: spells out its state when the animation is off */
+.nav-toggle.with-label {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  gap: var(--s-2);
+  padding: 0 var(--s-4);
+  border-color: var(--line-strong);
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 550;
+}
+
+.nav-toggle.with-label span {
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .nav-toggle.with-label span {
+    display: none;
+  }
+
+  .nav-toggle.with-label {
+    width: 48px;
+    padding: 0;
+  }
+}

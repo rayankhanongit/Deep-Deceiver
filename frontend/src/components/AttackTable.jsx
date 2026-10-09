@@ -1,3 +1,8 @@
+import { Download, FileJson, FileSpreadsheet } from "lucide-react";
+
+import Button from "./ui/Button";
+import { downloadText, fileStamp, toCsv, toJson } from "../utils/download";
+
 function AttackTable({ events }) {
 
   const threats = events
@@ -18,14 +23,61 @@ function AttackTable({ events }) {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
+  // ---- exports ------------------------------------------------------
+
+  const exportAllCsv = () =>
+    downloadText(
+      `deep-deceiver-events_${fileStamp()}.csv`,
+      toCsv(events),
+      "text/csv"
+    );
+
+  const exportAllJson = () =>
+    downloadText(
+      `deep-deceiver-events_${fileStamp()}.json`,
+      toJson(events),
+      "application/json"
+    );
+
+  const exportRow = (event) =>
+    downloadText(
+      `deep-deceiver-event_${fileStamp(event.timestamp)}.json`,
+      toJson(event),
+      "application/json"
+    );
+
   return (
     <div className="attack-table-container">
 
-      <div className="section-header">
+      <div className="section-header section-header-actions">
         <div>
           <h3>Recent Threats</h3>
           <p>Latest detected prompt injection events</p>
         </div>
+
+        {events.length > 0 && (
+          <div className="export-actions" role="group" aria-label="Export events">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={FileSpreadsheet}
+              onClick={exportAllCsv}
+              title={`Download all ${events.length} events in this time range as CSV`}
+            >
+              Download CSV
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={FileJson}
+              onClick={exportAllJson}
+              title={`Download all ${events.length} events in this time range as JSON`}
+            >
+              Download JSON
+            </Button>
+          </div>
+        )}
       </div>
 
       {threats.length === 0 ? (
@@ -47,6 +99,7 @@ function AttackTable({ events }) {
                 <th>Risk</th>
                 <th>Route</th>
                 <th>Action</th>
+                <th>Download</th>
               </tr>
             </thead>
 
@@ -82,6 +135,18 @@ function AttackTable({ events }) {
                     <span className="action-badge">
                       {event.action}
                     </span>
+                  </td>
+
+                  <td>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Download}
+                      onClick={() => exportRow(event)}
+                      aria-label={`Download event from ${formatTime(event.timestamp)} as JSON`}
+                    >
+                      JSON
+                    </Button>
                   </td>
 
                 </tr>

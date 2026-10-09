@@ -1916,3 +1916,22 @@ textarea {
 .main:focus-visible {
   outline: none; /* programmatic skip-link target, not an interactive control */
 }
+
+/* SOC table: export actions */
+.section-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-4);
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.attack-table td .btn {
+  min-height: 40px;
+}
